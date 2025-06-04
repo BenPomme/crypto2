@@ -116,4 +116,4 @@ Thumbs.db
 
 # Firebase
 firebase-adminsdk-*.json
-serviceAccountKey.json
+serviceAccountKey.jsonfirebase-service-account.json
