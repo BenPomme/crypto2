@@ -65,8 +65,16 @@ class TechnicalIndicators:
         close = close.astype('float64')
         volume = volume.astype('float64')
         
-        result = ta.mfi(high=high, low=low, close=close, volume=volume, length=period)
-        return result.astype('float64') if result is not None else pd.Series(dtype='float64')
+        try:
+            result = ta.mfi(high=high, low=low, close=close, volume=volume, length=period)
+            if result is not None:
+                # Explicitly handle the dtype warning by converting to float64
+                return pd.Series(result, dtype='float64', index=high.index)
+            else:
+                return pd.Series(dtype='float64', index=high.index)
+        except Exception as e:
+            logger.error(f"Error calculating MFI: {e}")
+            return pd.Series(dtype='float64', index=high.index)
     
     @staticmethod
     def stochastic_oscillator(high: pd.Series, low: pd.Series, close: pd.Series,
@@ -230,24 +238,36 @@ class TechnicalIndicators:
         result_df = df.copy()
         
         try:
-            # Moving Averages
-            result_df['sma_fast'] = cls.simple_moving_average(
-                df['close'], default_config['ma_fast']
-            )
-            result_df['sma_slow'] = cls.simple_moving_average(
-                df['close'], default_config['ma_slow']
-            )
-            result_df['ema_fast'] = cls.exponential_moving_average(
-                df['close'], default_config['ma_fast']
-            )
-            result_df['ema_slow'] = cls.exponential_moving_average(
-                df['close'], default_config['ma_slow']
-            )
+            # Moving Averages - essential for MA strategy
+            try:
+                result_df['sma_fast'] = cls.simple_moving_average(
+                    df['close'], default_config['ma_fast']
+                )
+                result_df['sma_slow'] = cls.simple_moving_average(
+                    df['close'], default_config['ma_slow']
+                )
+                result_df['ema_fast'] = cls.exponential_moving_average(
+                    df['close'], default_config['ma_fast']
+                )
+                result_df['ema_slow'] = cls.exponential_moving_average(
+                    df['close'], default_config['ma_slow']
+                )
+            except Exception as e:
+                logger.error(f"Error calculating moving averages: {e}")
+                # Create empty series if calculation fails
+                result_df['sma_fast'] = pd.Series(index=df.index, dtype='float64')
+                result_df['sma_slow'] = pd.Series(index=df.index, dtype='float64')
+                result_df['ema_fast'] = pd.Series(index=df.index, dtype='float64')
+                result_df['ema_slow'] = pd.Series(index=df.index, dtype='float64')
             
-            # RSI
-            result_df['rsi'] = cls.relative_strength_index(
-                df['close'], default_config['rsi_period']
-            )
+            # RSI - essential for strategy filters
+            try:
+                result_df['rsi'] = cls.relative_strength_index(
+                    df['close'], default_config['rsi_period']
+                )
+            except Exception as e:
+                logger.error(f"Error calculating RSI: {e}")
+                result_df['rsi'] = pd.Series(index=df.index, dtype='float64')
             
             # Bollinger Bands
             bb_data = cls.bollinger_bands(
