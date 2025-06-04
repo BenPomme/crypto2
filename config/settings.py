@@ -12,7 +12,7 @@ load_dotenv('.env.local')
 
 class AlpacaSettings(BaseSettings):
     """Alpaca API configuration"""
-    endpoint: str = Field(default="https://paper-api.alpaca.markets/v2", env="ALPACA_ENDPOINT")
+    endpoint: str = Field(default="https://paper-api.alpaca.markets", env="ALPACA_ENDPOINT")
     key: str = Field(env="ALPACA_KEY")
     secret: str = Field(env="ALPACA_SECRET")
     

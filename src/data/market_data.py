@@ -41,7 +41,8 @@ class AlpacaDataProvider(MarketDataProvider):
         self.api = REST(
             key_id=settings.alpaca.key,
             secret_key=settings.alpaca.secret,
-            base_url=URL(settings.alpaca.endpoint)
+            base_url=settings.alpaca.endpoint,
+            api_version='v2'
         )
         
         # Timeframe mapping
