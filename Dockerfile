@@ -1,4 +1,4 @@
-# Multi-stage build for crypto trading bot
+# Multi-stage build for crypto trading bot v2024.06.04
 FROM python:3.11-slim as base
 
 # Set environment variables

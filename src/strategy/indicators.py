@@ -272,35 +272,38 @@ class TechnicalIndicators:
         
         try:
             # Moving Averages - essential for MA strategy
+            logger.info(f"Calculating moving averages with {len(df)} bars")
             try:
-                result_df['sma_fast'] = cls.simple_moving_average(
-                    df['close'], default_config['ma_fast']
-                )
-                result_df['sma_slow'] = cls.simple_moving_average(
-                    df['close'], default_config['ma_slow']
-                )
-                result_df['ema_fast'] = cls.exponential_moving_average(
-                    df['close'], default_config['ma_fast']
-                )
-                result_df['ema_slow'] = cls.exponential_moving_average(
-                    df['close'], default_config['ma_slow']
-                )
+                sma_fast = cls.simple_moving_average(df['close'], default_config['ma_fast'])
+                sma_slow = cls.simple_moving_average(df['close'], default_config['ma_slow'])
+                ema_fast = cls.exponential_moving_average(df['close'], default_config['ma_fast'])
+                ema_slow = cls.exponential_moving_average(df['close'], default_config['ma_slow'])
+                
+                # Ensure we got valid results
+                result_df['sma_fast'] = sma_fast if sma_fast is not None else pd.Series(df['close'].rolling(default_config['ma_fast']).mean(), dtype='float64')
+                result_df['sma_slow'] = sma_slow if sma_slow is not None else pd.Series(df['close'].rolling(default_config['ma_slow']).mean(), dtype='float64')
+                result_df['ema_fast'] = ema_fast if ema_fast is not None else pd.Series(df['close'].ewm(span=default_config['ma_fast']).mean(), dtype='float64')
+                result_df['ema_slow'] = ema_slow if ema_slow is not None else pd.Series(df['close'].ewm(span=default_config['ma_slow']).mean(), dtype='float64')
+                
+                logger.info(f"Successfully calculated MAs: SMA_fast={result_df['sma_fast'].iloc[-1]:.2f}, SMA_slow={result_df['sma_slow'].iloc[-1]:.2f}")
             except Exception as e:
                 logger.error(f"Error calculating moving averages: {e}")
-                # Create empty series if calculation fails
-                result_df['sma_fast'] = pd.Series(index=df.index, dtype='float64')
-                result_df['sma_slow'] = pd.Series(index=df.index, dtype='float64')
-                result_df['ema_fast'] = pd.Series(index=df.index, dtype='float64')
-                result_df['ema_slow'] = pd.Series(index=df.index, dtype='float64')
+                # Create fallback manual calculations
+                result_df['sma_fast'] = df['close'].rolling(default_config['ma_fast']).mean()
+                result_df['sma_slow'] = df['close'].rolling(default_config['ma_slow']).mean()
+                result_df['ema_fast'] = df['close'].ewm(span=default_config['ma_fast']).mean()
+                result_df['ema_slow'] = df['close'].ewm(span=default_config['ma_slow']).mean()
+                logger.info(f"Used fallback MA calculations")
             
             # RSI - essential for strategy filters
             try:
-                result_df['rsi'] = cls.relative_strength_index(
-                    df['close'], default_config['rsi_period']
-                )
+                rsi = cls.relative_strength_index(df['close'], default_config['rsi_period'])
+                result_df['rsi'] = rsi if rsi is not None else pd.Series(50.0, index=df.index, dtype='float64')
+                logger.info(f"Successfully calculated RSI: {result_df['rsi'].iloc[-1]:.1f}")
             except Exception as e:
                 logger.error(f"Error calculating RSI: {e}")
-                result_df['rsi'] = pd.Series(index=df.index, dtype='float64')
+                result_df['rsi'] = pd.Series(50.0, index=df.index, dtype='float64')
+                logger.info(f"Used fallback RSI value: 50.0")
             
             # Bollinger Bands
             bb_data = cls.bollinger_bands(
