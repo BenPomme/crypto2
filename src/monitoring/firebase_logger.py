@@ -4,7 +4,7 @@ Handles logging and data persistence to Firebase Firestore
 """
 import json
 from typing import Dict, Any, Optional, List
-from datetime import datetime
+from datetime import datetime, timedelta
 import logging
 import traceback
 
@@ -66,18 +66,11 @@ class FirebaseLogger:
                 logger.info("Using existing Firebase app")
             except ValueError:
                 # Try to initialize with available credentials
-                if has_service_account:
-                    # Use file-based credentials
-                    cred = credentials.ApplicationDefault()
-                elif has_firebase_key:
+                if has_firebase_key:
                     # Use service account key from environment
                     import json
-                    try:
-                        service_account_info = json.loads(os.getenv('FIREBASE_SERVICE_ACCOUNT_KEY'))
-                        cred = credentials.Certificate(service_account_info)
-                    except json.JSONDecodeError as e:
-                        logger.error(f"Invalid JSON in FIREBASE_SERVICE_ACCOUNT_KEY: {e}")
-                        raise
+                    service_account_info = json.loads(os.getenv('FIREBASE_SERVICE_ACCOUNT_KEY'))
+                    cred = credentials.Certificate(service_account_info)
                 else:
                     # Use application default credentials (if available)
                     cred = credentials.ApplicationDefault()
