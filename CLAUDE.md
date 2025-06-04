@@ -195,3 +195,4 @@ railway redeploy
 - `src/` - All source code organized by module (data, strategy, risk, execution, monitoring)
 - `tests/` - Comprehensive test suite for all modules
 - `config/` - Configuration management with environment variables# Environment variables updated Wed Jun  4 12:20:42 CEST 2025
+# Firebase setup completed Wed Jun  4 12:40:57 CEST 2025
