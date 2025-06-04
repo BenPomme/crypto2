@@ -1,0 +1,57 @@
+# Core trading and market data
+alpaca-trade-api==3.1.1
+pandas==2.1.4
+numpy==1.24.4
+
+# Technical analysis
+pandas-ta==0.3.14b0
+TA-Lib==0.4.28
+
+# Machine Learning
+scikit-learn==1.3.2
+xgboost==2.0.3
+lightgbm==4.1.0
+
+# Online Learning
+river==0.21.0
+
+# Database and storage
+firebase-admin==6.4.0
+SQLAlchemy==2.0.25
+
+# Configuration and environment
+python-dotenv==1.0.0
+pydantic==2.5.2
+pydantic-settings==2.1.0
+
+# Async and networking
+aiohttp==3.9.1
+websockets==12.0
+
+# Logging and monitoring
+structlog==23.2.0
+sentry-sdk==1.40.6
+
+# Testing
+pytest==7.4.4
+pytest-asyncio==0.21.1
+pytest-cov==4.1.0
+pytest-mock==3.12.0
+
+# Data processing and utilities
+python-dateutil==2.8.2
+pytz==2023.3
+schedule==1.2.0
+
+# Visualization (for analysis)
+matplotlib==3.8.2
+plotly==5.17.0
+
+# Development tools
+black==23.12.1
+flake8==7.0.0
+mypy==1.8.0
+
+# Optional: Reinforcement Learning (if needed later)
+stable-baselines3==2.2.1
+gym==0.29.1
