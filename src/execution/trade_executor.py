@@ -10,6 +10,7 @@ from datetime import datetime
 from ..strategy.base_strategy import TradingSignal, SignalType
 from ..risk.risk_manager import RiskManager, RiskCheckResult
 from .order_manager import OrderManager, OrderResult, OrderSide, OrderType, OrderStatus
+from ..utils.fee_calculator import FeeCalculator
 
 logger = logging.getLogger(__name__)
 
@@ -29,6 +30,7 @@ class TradeExecutor:
         """
         self.risk_manager = risk_manager
         self.order_manager = OrderManager()
+        self.fee_calculator = FeeCalculator()
         self.config = config or {}
         
         # Default configuration
@@ -231,19 +233,35 @@ class TradeExecutor:
             if slippage > max_slippage:
                 logger.warning(f"High slippage detected: {slippage:.3%} > {max_slippage:.3%}")
         
-        # Place stop loss and take profit orders if enabled
+        # Calculate fee-adjusted targets
+        position_value = final_order.filled_price * (final_order.filled_quantity or final_order.quantity)
+        original_tp_pct = self.config['default_take_profit_pct']
+        original_sl_pct = self.config['default_stop_loss_pct']
+        
+        # Adjust targets for trading fees
+        adjusted_tp_pct, adjusted_sl_pct = self.fee_calculator.adjust_targets_for_fees(
+            take_profit_pct=original_tp_pct,
+            stop_loss_pct=original_sl_pct,
+            position_value=position_value,
+            symbol=signal.symbol
+        )
+        
+        logger.info(f"Fee adjustment: TP {original_tp_pct:.3f} → {adjusted_tp_pct:.3f}, "
+                   f"SL {original_sl_pct:.3f} → {adjusted_sl_pct:.3f}")
+        
+        # Place stop loss and take profit orders with adjusted targets
         protective_orders = []
         
         if self.config['enable_stop_loss'] and final_order.filled_price:
             stop_order = self._place_stop_loss_order(
-                signal, final_order, position_size
+                signal, final_order, position_size, stop_loss_pct=adjusted_sl_pct
             )
             if stop_order:
                 protective_orders.append(stop_order)
         
         if self.config['enable_take_profit'] and final_order.filled_price:
             tp_order = self._place_take_profit_order(
-                signal, final_order, position_size
+                signal, final_order, position_size, take_profit_pct=adjusted_tp_pct
             )
             if tp_order:
                 protective_orders.append(tp_order)
@@ -334,14 +352,15 @@ class TradeExecutor:
     
     def _place_stop_loss_order(self, signal: TradingSignal, 
                               entry_order: OrderResult,
-                              position_size: Any) -> Optional[OrderResult]:
+                              position_size: Any,
+                              stop_loss_pct: Optional[float] = None) -> Optional[OrderResult]:
         """Place stop loss order"""
         try:
             if not entry_order.filled_price:
                 return None
             
             # Calculate stop loss price
-            stop_loss_pct = self.config['default_stop_loss_pct']
+            stop_loss_pct = stop_loss_pct or self.config['default_stop_loss_pct']
             
             if signal.signal_type == SignalType.BUY:
                 stop_price = entry_order.filled_price * (1 - stop_loss_pct)
@@ -350,30 +369,14 @@ class TradeExecutor:
                 stop_price = entry_order.filled_price * (1 + stop_loss_pct)
                 order_side = OrderSide.BUY
             
-            # For crypto, use stop_limit order instead of stop
-            is_crypto = '/' in signal.symbol and 'USD' in signal.symbol
-            
-            if is_crypto:
-                # Crypto requires stop_limit orders, not plain stop orders
-                stop_order = self.order_manager.place_order(
-                    symbol=signal.symbol,
-                    side=order_side,
-                    quantity=entry_order.filled_quantity or entry_order.quantity,
-                    order_type=OrderType.STOP_LIMIT,
-                    stop_price=stop_price,
-                    limit_price=stop_price,  # Set limit price same as stop price
-                    client_order_id=f"sl_{entry_order.order_id}"
-                )
-            else:
-                # Stocks can use regular stop orders
-                stop_order = self.order_manager.place_order(
-                    symbol=signal.symbol,
-                    side=order_side,
-                    quantity=entry_order.filled_quantity or entry_order.quantity,
-                    order_type=OrderType.STOP,
-                    stop_price=stop_price,
-                    client_order_id=f"sl_{entry_order.order_id}"
-                )
+            stop_order = self.order_manager.place_order(
+                symbol=signal.symbol,
+                side=order_side,
+                quantity=entry_order.filled_quantity or entry_order.quantity,
+                order_type=OrderType.STOP,
+                stop_price=stop_price,
+                client_order_id=f"sl_{entry_order.order_id}"
+            )
             
             logger.info(f"Stop loss placed: {stop_order.order_id} @ {stop_price:.2f}")
             return stop_order
@@ -384,14 +387,15 @@ class TradeExecutor:
     
     def _place_take_profit_order(self, signal: TradingSignal,
                                 entry_order: OrderResult,
-                                position_size: Any) -> Optional[OrderResult]:
+                                position_size: Any,
+                                take_profit_pct: Optional[float] = None) -> Optional[OrderResult]:
         """Place take profit order"""
         try:
             if not entry_order.filled_price:
                 return None
             
             # Calculate take profit price
-            take_profit_pct = self.config['default_take_profit_pct']
+            take_profit_pct = take_profit_pct or self.config['default_take_profit_pct']
             
             if signal.signal_type == SignalType.BUY:
                 limit_price = entry_order.filled_price * (1 + take_profit_pct)
