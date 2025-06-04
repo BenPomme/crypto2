@@ -45,7 +45,7 @@ class FeatureEngineer:
         }
         
         self.default_config.update(self.config)
-        logger.info("FeatureEngineer initialized")
+        logger.info(f"FeatureEngineer initialized with MA periods: fast={self.default_config['ma_fast']}, slow={self.default_config['ma_slow']}")
     
     def create_price_features(self, df: pd.DataFrame) -> pd.DataFrame:
         """

@@ -275,6 +275,7 @@ class TechnicalIndicators:
             logger.info(f"Calculating indicators with {len(df)} bars using pure pandas")
             
             # Use pure pandas calculations to avoid pandas-ta issues
+            logger.info(f"Using MA periods: fast={default_config['ma_fast']}, slow={default_config['ma_slow']}")
             result_df['sma_fast'] = df['close'].rolling(window=default_config['ma_fast'], min_periods=1).mean()
             result_df['sma_slow'] = df['close'].rolling(window=default_config['ma_slow'], min_periods=1).mean()
             result_df['ema_fast'] = df['close'].ewm(span=default_config['ma_fast'], min_periods=1).mean()
