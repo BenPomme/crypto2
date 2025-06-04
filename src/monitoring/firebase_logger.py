@@ -50,24 +50,31 @@ class FirebaseLogger:
         try:
             settings = get_settings()
             
+            # Check if we have Firebase credentials available
+            import os
+            has_service_account = os.getenv('GOOGLE_APPLICATION_CREDENTIALS') is not None
+            has_firebase_key = os.getenv('FIREBASE_SERVICE_ACCOUNT_KEY') is not None
+            
+            if not has_service_account and not has_firebase_key:
+                logger.warning("No Firebase credentials found, running without Firebase logging")
+                self.initialized = False
+                return
+            
             # Check if Firebase app is already initialized
             try:
                 app = firebase_admin.get_app()
                 logger.info("Using existing Firebase app")
             except ValueError:
-                # Initialize Firebase with settings
-                firebase_config = {
-                    "type": "service_account",
-                    "project_id": settings.firebase.project_id,
-                    "client_email": f"firebase-adminsdk@{settings.firebase.project_id}.iam.gserviceaccount.com",
-                    "client_id": settings.firebase.messaging_sender_id,
-                    # Note: In production, use a proper service account key file
-                    # For now, we'll use the web config (limited functionality)
-                }
+                # Try to initialize with available credentials
+                if has_firebase_key:
+                    # Use service account key from environment
+                    import json
+                    service_account_info = json.loads(os.getenv('FIREBASE_SERVICE_ACCOUNT_KEY'))
+                    cred = credentials.Certificate(service_account_info)
+                else:
+                    # Use application default credentials (if available)
+                    cred = credentials.ApplicationDefault()
                 
-                # For demo purposes, we'll use application default credentials
-                # In production, set up proper service account
-                cred = credentials.ApplicationDefault()
                 app = firebase_admin.initialize_app(cred, {
                     'projectId': settings.firebase.project_id
                 })
@@ -81,8 +88,7 @@ class FirebaseLogger:
             logger.info("Firebase logger initialized successfully")
             
         except Exception as e:
-            logger.error(f"Firebase initialization failed: {e}")
-            logger.error(f"Traceback: {traceback.format_exc()}")
+            logger.warning(f"Firebase initialization failed, continuing without Firebase: {e}")
             self.initialized = False
     
     def log_trade(self, trade_data: Dict[str, Any]) -> bool:
