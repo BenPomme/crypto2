@@ -202,8 +202,8 @@ class RiskManager:
                     if len(returns) > 5:
                         volatility = returns.std()
                 
-                # Determine if this is a crypto trade
-                is_crypto = '/' in signal.symbol and ('USD' in signal.symbol or 'USDT' in signal.symbol)
+                # All symbols are crypto now
+                is_crypto = True
                 
                 # Calculate stop loss price for risk-based sizing
                 stop_loss_price = None
@@ -220,24 +220,17 @@ class RiskManager:
                     stop_loss_price=stop_loss_price
                 )
                 
-                # Additional position size validation - account for leverage
-                if is_crypto:
-                    # Crypto requires cash (no margin)
-                    required_cash = position_size.size_usd
-                    available_cash = cash_available
-                else:
-                    # Stocks can use buying power (includes margin)
-                    required_cash = position_size.size_usd
-                    available_cash = buying_power
+                # Crypto position validation (cash only, no margin)
+                required_cash = position_size.size_usd
+                available_cash = cash_available
                 
                 if required_cash > available_cash:
                     approved = False
-                    asset_type = "crypto" if is_crypto else "stock"
                     checks.append(RiskCheck(
-                        name="buying_power_check",
+                        name="cash_availability_check",
                         passed=False,
                         risk_level=RiskLevel.CRITICAL,
-                        message=f"Insufficient {asset_type} buying power: need ${required_cash:.2f}, have ${available_cash:.2f}",
+                        message=f"Insufficient cash for crypto trade: need ${required_cash:.2f}, have ${available_cash:.2f}",
                         value=required_cash,
                         limit=available_cash
                     ))

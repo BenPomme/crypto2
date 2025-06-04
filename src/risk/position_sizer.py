@@ -63,8 +63,7 @@ class PositionSizer:
             'volatility_multiplier': 1.0,
             'kelly_lookback': 100,
             'max_leverage': 2.0,  # Smart leverage usage
-            'crypto_max_position': 0.5,  # 50% max for crypto (no margin)
-            'stock_max_position': 1.0,   # 100% max for stocks (with margin)
+            'crypto_max_position': 0.4,  # 40% max per crypto pair (4 pairs = 160% max total)
             'target_utilization': 0.8,   # Use 80% of available buying power
         }
         
@@ -423,33 +422,13 @@ class PositionSizer:
             default_price_risk = 0.04
             max_position_value = risk_amount / default_price_risk
         
-        # Apply asset-specific position limits
-        if is_crypto:
-            # Crypto: No margin, limit to cash percentage
-            max_crypto_position = account_value * self.config['crypto_max_position']
-            position_value = min(max_position_value, max_crypto_position)
-            leverage_used = 1.0
-            logger.info(f"Crypto position sizing: max_risk_based=${max_position_value:.0f}, "
-                       f"max_crypto_limit=${max_crypto_position:.0f}")
-        else:
-            # Stocks: Can use margin
-            if is_pattern_day_trader:
-                # PDT: 4x intraday buying power
-                max_leveraged_position = available_capital * self.config['target_utilization']
-                effective_leverage = min(4.0, self.config['max_leverage'])
-            else:
-                # Regular margin: 2x buying power
-                max_leveraged_position = available_capital * self.config['target_utilization']
-                effective_leverage = min(2.0, self.config['max_leverage'])
-            
-            # Don't exceed portfolio percentage limit
-            max_portfolio_position = account_value * self.config['stock_max_position']
-            position_value = min(max_position_value, max_leveraged_position, max_portfolio_position)
-            leverage_used = min(position_value / account_value, effective_leverage)
-            
-            logger.info(f"Stock position sizing: max_risk_based=${max_position_value:.0f}, "
-                       f"max_leveraged=${max_leveraged_position:.0f}, "
-                       f"max_portfolio=${max_portfolio_position:.0f}, leverage={leverage_used:.2f}x")
+        # Crypto-only position limits (no margin available for crypto)
+        max_crypto_position = account_value * self.config['crypto_max_position']
+        position_value = min(max_position_value, max_crypto_position)
+        leverage_used = 1.0  # No leverage available for crypto
+        
+        logger.info(f"Crypto position sizing: max_risk_based=${max_position_value:.0f}, "
+                   f"max_crypto_limit=${max_crypto_position:.0f}")
         
         # Apply minimum position size
         min_position = self.config['min_position_size']
@@ -464,16 +443,12 @@ class PositionSizer:
         else:
             actual_risk = position_value * 0.04  # Assume 4% risk
         
-        # Calculate confidence based on leverage utilization
-        if is_crypto:
-            confidence = min(0.9, position_value / (account_value * 0.3))  # Higher confidence for reasonable crypto positions
-        else:
-            confidence = min(0.95, leverage_used / 2.0)  # Higher confidence with moderate leverage
+        # Calculate confidence based on position size utilization
+        confidence = min(0.9, position_value / (account_value * 0.3))  # Higher confidence for reasonable crypto positions
         
         metadata = {
             'leverage_used': leverage_used,
-            'is_crypto': is_crypto,
-            'is_pattern_day_trader': is_pattern_day_trader,
+            'is_crypto': True,  # All symbols are crypto now
             'available_capital': available_capital,
             'risk_percentage': (actual_risk / account_value) * 100,
             'position_percentage': (position_value / account_value) * 100
