@@ -1,10 +1,10 @@
-# Core trading system - flexible versions
+# Core trading system - compatible versions
 alpaca-trade-api
-pandas>=2.0.0
-numpy>=1.20.0
+pandas>=2.0.0,<2.2.0
+numpy>=1.20.0,<2.0.0
 
 # Technical analysis
-pandas-ta
+pandas-ta>=0.3.14b0
 
 # Basic ML
 scikit-learn
