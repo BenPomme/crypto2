@@ -142,11 +142,9 @@ class OrderManager:
                 'symbol': symbol,
                 'qty': quantity,
                 'side': side.value,
-                'type': order_type.value
+                'type': order_type.value,
+                'time_in_force': 'gtc'  # Crypto orders require time_in_force: 'gtc' or 'ioc'
             }
-            
-            # Note: Crypto orders on Alpaca don't support time_in_force parameter
-            # Only add time_in_force for non-crypto symbols if needed in the future
             
             if client_order_id:
                 order_params['client_order_id'] = client_order_id
@@ -161,6 +159,7 @@ class OrderManager:
             
             # Submit order to Alpaca
             logger.info(f"Placing {side.value} order: {quantity} {symbol} @ {order_type.value}")
+            logger.debug(f"Order params: {order_params}")
             
             alpaca_order = self.api.submit_order(**order_params)
             
