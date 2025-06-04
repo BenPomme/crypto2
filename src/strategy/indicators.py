@@ -271,88 +271,55 @@ class TechnicalIndicators:
         result_df = df.copy()
         
         try:
-            # Moving Averages - essential for MA strategy
-            logger.info(f"Calculating moving averages with {len(df)} bars")
+            # Moving Averages - SKIP pandas-ta, use pure pandas
+            logger.info(f"Calculating indicators with {len(df)} bars using pure pandas")
+            
+            # Use pure pandas calculations to avoid pandas-ta issues
+            result_df['sma_fast'] = df['close'].rolling(window=default_config['ma_fast'], min_periods=1).mean()
+            result_df['sma_slow'] = df['close'].rolling(window=default_config['ma_slow'], min_periods=1).mean()
+            result_df['ema_fast'] = df['close'].ewm(span=default_config['ma_fast'], min_periods=1).mean()
+            result_df['ema_slow'] = df['close'].ewm(span=default_config['ma_slow'], min_periods=1).mean()
+            
+            # Simple RSI calculation using pandas
+            delta = df['close'].diff()
+            gain = (delta.where(delta > 0, 0)).rolling(window=default_config['rsi_period'], min_periods=1).mean()
+            loss = (-delta.where(delta < 0, 0)).rolling(window=default_config['rsi_period'], min_periods=1).mean()
+            rs = gain / (loss + 1e-10)  # Avoid division by zero
+            result_df['rsi'] = 100 - (100 / (1 + rs))
+            result_df['rsi'] = result_df['rsi'].fillna(50.0)  # Fill NaN with neutral RSI
+            
+            logger.info(f"Pure pandas calculations complete: SMA_fast={result_df['sma_fast'].iloc[-1]:.2f}, SMA_slow={result_df['sma_slow'].iloc[-1]:.2f}, RSI={result_df['rsi'].iloc[-1]:.1f}")
+            
+            # SKIP PROBLEMATIC INDICATORS temporarily to isolate the error
+            # Only calculate essential indicators needed for MA strategy
+            
+            # Add minimal required indicators with safe defaults
             try:
-                sma_fast = cls.simple_moving_average(df['close'], default_config['ma_fast'])
-                sma_slow = cls.simple_moving_average(df['close'], default_config['ma_slow'])
-                ema_fast = cls.exponential_moving_average(df['close'], default_config['ma_fast'])
-                ema_slow = cls.exponential_moving_average(df['close'], default_config['ma_slow'])
-                
-                # Ensure we got valid results
-                result_df['sma_fast'] = sma_fast if sma_fast is not None else pd.Series(df['close'].rolling(default_config['ma_fast']).mean(), dtype='float64')
-                result_df['sma_slow'] = sma_slow if sma_slow is not None else pd.Series(df['close'].rolling(default_config['ma_slow']).mean(), dtype='float64')
-                result_df['ema_fast'] = ema_fast if ema_fast is not None else pd.Series(df['close'].ewm(span=default_config['ma_fast']).mean(), dtype='float64')
-                result_df['ema_slow'] = ema_slow if ema_slow is not None else pd.Series(df['close'].ewm(span=default_config['ma_slow']).mean(), dtype='float64')
-                
-                logger.info(f"Successfully calculated MAs: SMA_fast={result_df['sma_fast'].iloc[-1]:.2f}, SMA_slow={result_df['sma_slow'].iloc[-1]:.2f}")
+                # Bollinger Bands (optional)
+                bb_sma = df['close'].rolling(window=default_config['bb_period'], min_periods=1).mean()
+                bb_std = df['close'].rolling(window=default_config['bb_period'], min_periods=1).std()
+                result_df['bb_upper'] = bb_sma + (bb_std * default_config['bb_std'])
+                result_df['bb_lower'] = bb_sma - (bb_std * default_config['bb_std'])
+                result_df['bb_middle'] = bb_sma
             except Exception as e:
-                logger.error(f"Error calculating moving averages: {e}")
-                # Create fallback manual calculations
-                result_df['sma_fast'] = df['close'].rolling(default_config['ma_fast']).mean()
-                result_df['sma_slow'] = df['close'].rolling(default_config['ma_slow']).mean()
-                result_df['ema_fast'] = df['close'].ewm(span=default_config['ma_fast']).mean()
-                result_df['ema_slow'] = df['close'].ewm(span=default_config['ma_slow']).mean()
-                logger.info(f"Used fallback MA calculations")
+                logger.warning(f"Skipping Bollinger Bands: {e}")
             
-            # RSI - essential for strategy filters
+            # Add basic volume analysis
             try:
-                rsi = cls.relative_strength_index(df['close'], default_config['rsi_period'])
-                result_df['rsi'] = rsi if rsi is not None else pd.Series(50.0, index=df.index, dtype='float64')
-                logger.info(f"Successfully calculated RSI: {result_df['rsi'].iloc[-1]:.1f}")
+                result_df['volume_ma'] = df['volume'].rolling(window=20, min_periods=1).mean()
+                result_df['volume_ratio'] = df['volume'] / (result_df['volume_ma'] + 1e-10)
             except Exception as e:
-                logger.error(f"Error calculating RSI: {e}")
-                result_df['rsi'] = pd.Series(50.0, index=df.index, dtype='float64')
-                logger.info(f"Used fallback RSI value: 50.0")
+                logger.warning(f"Skipping volume analysis: {e}")
+                result_df['volume_ma'] = df['volume']
+                result_df['volume_ratio'] = pd.Series(1.0, index=df.index)
             
-            # Bollinger Bands
-            bb_data = cls.bollinger_bands(
-                df['close'], default_config['bb_period'], default_config['bb_std']
-            )
-            if bb_data is not None and not bb_data.empty:
-                result_df = result_df.join(bb_data, rsuffix='_bb')
-            
-            # ATR
-            result_df['atr'] = cls.average_true_range(
-                df['high'], df['low'], df['close'], default_config['atr_period']
-            )
-            
-            # OBV
-            result_df['obv'] = cls.on_balance_volume(df['close'], df['volume'])
-            
-            # MFI
-            result_df['mfi'] = cls.money_flow_index(
-                df['high'], df['low'], df['close'], df['volume'], 
-                default_config['mfi_period']
-            )
-            
-            # MACD
-            macd_data = cls.macd(df['close'])
-            if macd_data is not None and not macd_data.empty:
-                result_df = result_df.join(macd_data, rsuffix='_macd')
-            
-            # Stochastic
-            stoch_data = cls.stochastic_oscillator(
-                df['high'], df['low'], df['close'],
-                default_config['stoch_k'], default_config['stoch_d']
-            )
-            if stoch_data is not None and not stoch_data.empty:
-                result_df = result_df.join(stoch_data, rsuffix='_stoch')
-            
-            # Williams %R
-            result_df['williams_r'] = cls.williams_r(
-                df['high'], df['low'], df['close']
-            )
-            
-            # CCI
-            result_df['cci'] = cls.commodity_channel_index(
-                df['high'], df['low'], df['close']
-            )
-            
-            # Calculate trend strength
-            result_df['trend_strength'] = result_df['close'].rolling(
-                window=default_config['rsi_period']
-            ).apply(lambda x: cls.trend_strength(pd.Series(x)))
+            # Simple trend strength calculation
+            try:
+                price_changes = df['close'].diff().rolling(window=default_config['rsi_period'], min_periods=1)
+                result_df['trend_strength'] = (price_changes.apply(lambda x: (x > 0).sum()) / default_config['rsi_period']).fillna(0.5)
+            except Exception as e:
+                logger.warning(f"Skipping trend strength: {e}")
+                result_df['trend_strength'] = pd.Series(0.5, index=df.index)
             
             logger.info(f"Calculated indicators for {len(result_df)} bars")
             
