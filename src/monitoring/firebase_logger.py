@@ -91,6 +91,25 @@ class FirebaseLogger:
             logger.warning(f"Firebase initialization failed, continuing without Firebase: {e}")
             self.initialized = False
     
+    def _clean_data_for_firestore(self, data: Dict[str, Any]) -> Dict[str, Any]:
+        """Clean data to be compatible with Firestore"""
+        import numpy as np
+        cleaned = {}
+        for key, value in data.items():
+            if isinstance(value, np.bool_):
+                cleaned[key] = bool(value)
+            elif isinstance(value, np.integer):
+                cleaned[key] = int(value)
+            elif isinstance(value, np.floating):
+                cleaned[key] = float(value)
+            elif isinstance(value, np.ndarray):
+                cleaned[key] = value.tolist()
+            elif isinstance(value, dict):
+                cleaned[key] = self._clean_data_for_firestore(value)
+            else:
+                cleaned[key] = value
+        return cleaned
+    
     def log_trade(self, trade_data: Dict[str, Any]) -> bool:
         """
         Log trade execution to Firebase
@@ -110,8 +129,11 @@ class FirebaseLogger:
             if 'timestamp' not in trade_data:
                 trade_data['timestamp'] = datetime.now().isoformat()
             
+            # Clean data for Firestore compatibility
+            cleaned_data = self._clean_data_for_firestore(trade_data)
+            
             # Add to trades collection
-            doc_ref = self.db.collection('trades').add(trade_data)
+            doc_ref = self.db.collection('trades').add(cleaned_data)
             logger.debug(f"Trade logged to Firebase: {doc_ref[1].id}")
             
             return True
@@ -139,8 +161,11 @@ class FirebaseLogger:
             if 'timestamp' not in signal_data:
                 signal_data['timestamp'] = datetime.now().isoformat()
             
+            # Clean data for Firestore compatibility
+            cleaned_data = self._clean_data_for_firestore(signal_data)
+            
             # Add to signals collection
-            doc_ref = self.db.collection('signals').add(signal_data)
+            doc_ref = self.db.collection('signals').add(cleaned_data)
             logger.debug(f"Signal logged to Firebase: {doc_ref[1].id}")
             
             return True
