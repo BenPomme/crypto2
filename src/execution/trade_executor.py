@@ -350,14 +350,30 @@ class TradeExecutor:
                 stop_price = entry_order.filled_price * (1 + stop_loss_pct)
                 order_side = OrderSide.BUY
             
-            stop_order = self.order_manager.place_order(
-                symbol=signal.symbol,
-                side=order_side,
-                quantity=entry_order.filled_quantity or entry_order.quantity,
-                order_type=OrderType.STOP,
-                stop_price=stop_price,
-                client_order_id=f"sl_{entry_order.order_id}"
-            )
+            # For crypto, use stop_limit order instead of stop
+            is_crypto = '/' in signal.symbol and 'USD' in signal.symbol
+            
+            if is_crypto:
+                # Crypto requires stop_limit orders, not plain stop orders
+                stop_order = self.order_manager.place_order(
+                    symbol=signal.symbol,
+                    side=order_side,
+                    quantity=entry_order.filled_quantity or entry_order.quantity,
+                    order_type=OrderType.STOP_LIMIT,
+                    stop_price=stop_price,
+                    limit_price=stop_price,  # Set limit price same as stop price
+                    client_order_id=f"sl_{entry_order.order_id}"
+                )
+            else:
+                # Stocks can use regular stop orders
+                stop_order = self.order_manager.place_order(
+                    symbol=signal.symbol,
+                    side=order_side,
+                    quantity=entry_order.filled_quantity or entry_order.quantity,
+                    order_type=OrderType.STOP,
+                    stop_price=stop_price,
+                    client_order_id=f"sl_{entry_order.order_id}"
+                )
             
             logger.info(f"Stop loss placed: {stop_order.order_id} @ {stop_price:.2f}")
             return stop_order
