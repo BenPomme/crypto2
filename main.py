@@ -88,9 +88,13 @@ class CryptoTradingBot:
             }
             self.feature_engineer = FeatureEngineer(feature_config)
             
-            # Strategy with dynamic parameters
+            # Strategy with dynamic parameters - Support multiple symbols
+            symbols = [s.strip() for s in self.settings.trading.symbol.split(',')]
+            self.trading_symbols = symbols
+            logger.info(f"Trading symbols: {symbols}")
+            
             strategy_config = {
-                'symbol': self.settings.trading.symbol,
+                'symbol': symbols[0],  # Primary symbol for strategy
                 'volume_confirmation': True,
                 'stop_loss_pct': 0.05,
                 'take_profit_pct': 0.10,
@@ -102,20 +106,20 @@ class CryptoTradingBot:
             }
             self.strategy = MACrossoverStrategy(strategy_config, self.parameter_manager)
             
-            # Risk manager
+            # Risk manager - More aggressive for 5-10% monthly target
             risk_config = {
-                'max_position_size': 0.25,
-                'max_daily_loss': 0.05,
-                'risk_per_trade': self.settings.trading.risk_per_trade,
+                'max_position_size': 0.5,  # 50% max position for single pair strategy
+                'max_daily_loss': 0.08,    # 8% max daily loss
+                'risk_per_trade': 0.04,    # 4% risk per trade (higher for target ROI)
             }
             self.risk_manager = RiskManager(risk_config)
             
-            # Trade executor
+            # Trade executor - Optimized for target ROI
             executor_config = {
                 'enable_stop_loss': True,
                 'enable_take_profit': True,
-                'default_stop_loss_pct': 0.05,
-                'default_take_profit_pct': 0.10,
+                'default_stop_loss_pct': 0.04,  # Tighter stop loss (4%)
+                'default_take_profit_pct': 0.15, # Higher take profit (15%)
             }
             self.trade_executor = TradeExecutor(self.risk_manager, executor_config)
             
@@ -237,13 +241,23 @@ class CryptoTradingBot:
                 time.sleep(sleep_time)
     
     def _execute_trading_cycle(self) -> None:
-        """Execute one complete trading cycle"""
+        """Execute one complete trading cycle for all symbols"""
+        try:
+            # Cycle through all trading symbols
+            for symbol in self.trading_symbols:
+                self._execute_symbol_cycle(symbol)
+                
+        except Exception as e:
+            self.logger.error(f"Error in trading cycle: {e}")
+            raise
+    
+    def _execute_symbol_cycle(self, symbol: str) -> None:
+        """Execute trading cycle for a specific symbol"""
         try:
             # Step 1: Get latest market data
-            symbol = self.settings.trading.symbol
             self.logger.debug(f"Getting latest price for {symbol}")
             latest_price = self.data_provider.get_latest_price(symbol)
-            self.logger.debug(f"Latest price: ${latest_price:.2f}")
+            self.logger.debug(f"{symbol} latest price: ${latest_price:.2f}")
             
             # Create synthetic bar (in production, would get actual OHLCV bar)
             # Use timezone-aware datetime to match Alpaca data
