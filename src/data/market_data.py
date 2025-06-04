@@ -141,12 +141,7 @@ class AlpacaDataProvider(MarketDataProvider):
     def get_latest_price(self, symbol: str) -> float:
         """Get latest price for symbol"""
         try:
-            # Get latest trade
-            latest_trade = self.api.get_latest_crypto_trade(symbol)
-            if latest_trade and hasattr(latest_trade, 'price'):
-                return float(latest_trade.price)
-            
-            # Fallback to latest bar
+            # Get latest bar (most recent 1-minute candle)
             bars = self.api.get_crypto_bars(
                 symbol,
                 timeframe=TimeFrame.Minute,
