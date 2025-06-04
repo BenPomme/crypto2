@@ -74,8 +74,9 @@ class AlpacaDataProvider(MarketDataProvider):
             DataFrame with OHLCV data
         """
         try:
-            # Get end time as now, start time based on periods
-            end_time = datetime.now()
+            # Get end time as now, start time based on periods (in UTC)
+            from datetime import timezone
+            end_time = datetime.now(timezone.utc)
             
             # Calculate start time based on timeframe and periods
             if timeframe == "1Min":
@@ -96,13 +97,17 @@ class AlpacaDataProvider(MarketDataProvider):
             if not tf:
                 raise ValueError(f"Invalid timeframe: {timeframe}")
             
+            # Format timestamps as RFC3339 strings for Alpaca API
+            start_str = start_time.strftime('%Y-%m-%dT%H:%M:%SZ')
+            end_str = end_time.strftime('%Y-%m-%dT%H:%M:%SZ')
+            
             # Fetch data from Alpaca
             logger.info(f"Fetching {periods} periods of {timeframe} data for {symbol}")
             bars = self.api.get_crypto_bars(
                 symbol,
                 timeframe=tf,
-                start=start_time,
-                end=end_time,
+                start=start_str,
+                end=end_str,
                 limit=periods
             )
             
