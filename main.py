@@ -73,9 +73,12 @@ class CryptoTradingBot:
             if not self.data_provider.validate_connection():
                 raise RuntimeError("Failed to connect to Alpaca API")
             
-            # Data buffer
+            # Data buffers - one per symbol
             buffer_size = self.config.get('buffer_size', 1000)
-            self.data_buffer = DataBuffer(max_size=buffer_size)
+            self.data_buffers = {}
+            for symbol in symbols:
+                self.data_buffers[symbol] = DataBuffer(max_size=buffer_size)
+                self.logger.info(f"Created data buffer for {symbol}")
             
             # Parameter manager for ML-optimizable parameters
             self.parameter_manager = ParameterManager()
@@ -175,28 +178,35 @@ class CryptoTradingBot:
             self._shutdown()
     
     def _load_initial_data(self) -> None:
-        """Load initial historical data"""
+        """Load initial historical data for all trading symbols"""
         try:
-            symbol = self.settings.trading.symbol
             timeframe = self.settings.trading.data_timeframe
             periods = self.settings.trading.lookback_periods
             
-            self.logger.info(f"Loading initial data: {periods} periods of {timeframe} for {symbol}")
-            
-            # Get historical data
-            historical_data = self.data_provider.get_historical_data(
-                symbol=symbol,
-                timeframe=timeframe,
-                periods=periods
-            )
-            
-            if historical_data.empty:
-                raise RuntimeError("No historical data received")
-            
-            # Add to buffer
-            self.data_buffer.bulk_add(historical_data)
-            
-            self.logger.info(f"Loaded {len(historical_data)} bars of historical data")
+            # Load historical data for each symbol
+            for symbol in self.trading_symbols:
+                self.logger.info(f"Loading initial data: {periods} periods of {timeframe} for {symbol}")
+                
+                try:
+                    # Get historical data for this symbol
+                    historical_data = self.data_provider.get_historical_data(
+                        symbol=symbol,
+                        timeframe=timeframe,
+                        periods=periods
+                    )
+                    
+                    if historical_data.empty:
+                        self.logger.warning(f"No historical data received for {symbol}")
+                        continue
+                    
+                    # Add to symbol-specific buffer
+                    self.data_buffers[symbol].bulk_add(historical_data)
+                    
+                    self.logger.info(f"Loaded {len(historical_data)} bars for {symbol}")
+                    
+                except Exception as e:
+                    self.logger.error(f"Failed to load data for {symbol}: {e}")
+                    # Continue with other symbols
             
         except Exception as e:
             self.logger.error(f"Failed to load initial data: {e}")
@@ -274,25 +284,37 @@ class CryptoTradingBot:
                 'volume': 1000  # Placeholder volume
             }
             
-            # Add to buffer
-            self.data_buffer.add_bar(latest_bar)
+            # Add to symbol-specific buffer
+            if symbol not in self.data_buffers:
+                self.logger.warning(f"No data buffer for {symbol}, skipping")
+                return
+                
+            self.data_buffers[symbol].add_bar(latest_bar)
             
-            # Step 2: Check if we have enough data
+            # Step 2: Check if we have enough data for this symbol
             min_periods = self.strategy.get_min_periods()
-            if not self.data_buffer.is_ready(min_periods):
-                self.logger.debug(f"Insufficient data: {self.data_buffer.size()}/{min_periods}")
+            if not self.data_buffers[symbol].is_ready(min_periods):
+                self.logger.debug(f"Insufficient data for {symbol}: {self.data_buffers[symbol].size()}/{min_periods}")
                 return
             
-            # Step 3: Get data and engineer features
-            market_data = self.data_buffer.get_dataframe()
+            # Step 3: Get data and engineer features for this symbol
+            market_data = self.data_buffers[symbol].get_dataframe()
             featured_data = self.feature_engineer.engineer_features(market_data)
             
-            # Step 4: Generate trading signal
+            # Step 4: Generate trading signal for this symbol
+            # Temporarily update strategy symbol for this calculation
+            original_symbol = self.strategy.config.get('symbol')
+            self.strategy.config['symbol'] = symbol
+            
             signal = self.strategy.generate_signal(featured_data)
+            
+            # Restore original symbol
+            if original_symbol:
+                self.strategy.config['symbol'] = original_symbol
             
             # Log signal generation details
             if signal:
-                self.logger.info(f"🎯 Signal generated: {signal.signal_type.value} @ ${signal.price:.2f} (confidence: {signal.confidence:.2f})")
+                self.logger.info(f"🎯 {symbol} Signal: {signal.signal_type.value} @ ${signal.price:.2f} (confidence: {signal.confidence:.2f})")
                 self.logger.info(f"Signal reason: {signal.reason}")
             else:
                 # Log current MA status for debugging (use INFO level to see in logs)
@@ -306,12 +328,12 @@ class CryptoTradingBot:
                         
                         # Log every 5 cycles to avoid spam
                         if self.cycle_count % 5 == 0:
-                            self.logger.info(f"📊 Analysis: Fast MA=${fast_ma:.2f}, Slow MA=${slow_ma:.2f}, RSI={rsi}, Position={position}")
+                            self.logger.info(f"📊 {symbol} Analysis: Fast MA=${fast_ma:.2f}, Slow MA=${slow_ma:.2f}, RSI={rsi}, Position={position}")
                             
                             # Check if we're close to a crossover
                             ma_diff = fast_ma - slow_ma
-                            if abs(ma_diff) < 5:  # Within $5 of crossover
-                                self.logger.info(f"🔥 Close to crossover! MA difference: ${ma_diff:.2f}")
+                            if abs(ma_diff) < (latest_price * 0.001):  # Within 0.1% of crossover
+                                self.logger.info(f"🔥 {symbol} Close to crossover! MA difference: ${ma_diff:.2f}")
                 else:
                     self.logger.debug("No featured data available for analysis")
             
@@ -360,8 +382,9 @@ class CryptoTradingBot:
             # Get account info
             account_info = self.data_provider.get_account_info()
             
-            # Get buffer stats
-            buffer_stats = self.data_buffer.get_stats()
+            # Get buffer stats for all symbols
+            total_buffer_size = sum(buf.size() for buf in self.data_buffers.values())
+            buffer_info = ", ".join([f"{sym}:{buf.size()}" for sym, buf in self.data_buffers.items()])
             
             # Get execution stats
             execution_stats = self.trade_executor.get_execution_stats()
@@ -372,7 +395,7 @@ class CryptoTradingBot:
                 f"Return: {performance.get('total_return', 0):.2%}, "
                 f"Trades: {performance.get('num_trades', 0)}, "
                 f"Win Rate: {performance.get('win_rate', 0):.1%}, "
-                f"Buffer: {buffer_stats['size']}/{buffer_stats['max_size']}, "
+                f"Buffers: [{buffer_info}], "
                 f"Success Rate: {execution_stats.get('success_rate', 0):.1%}"
             )
             
