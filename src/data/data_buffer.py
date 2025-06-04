@@ -112,6 +112,26 @@ class DataBuffer:
         # Create DataFrame
         df = pd.DataFrame(data_list)
         df.set_index('timestamp', inplace=True)
+        
+        # Handle mixed timezone timestamps by converting all to UTC
+        if len(df.index) > 0:
+            try:
+                # Convert index to datetime if not already
+                if not isinstance(df.index, pd.DatetimeIndex):
+                    df.index = pd.to_datetime(df.index)
+                
+                # Make all timestamps timezone-aware (UTC) if they aren't already
+                if df.index.tz is None:
+                    df.index = df.index.tz_localize('UTC')
+                else:
+                    df.index = df.index.tz_convert('UTC')
+                    
+            except Exception as e:
+                # Log error but continue
+                import logging
+                logger = logging.getLogger(__name__)
+                logger.warning(f"Timestamp conversion warning: {e}")
+        
         df.sort_index(inplace=True)
         
         return df

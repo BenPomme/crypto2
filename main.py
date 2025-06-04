@@ -94,6 +94,11 @@ class CryptoTradingBot:
                 'volume_confirmation': True,
                 'stop_loss_pct': 0.05,
                 'take_profit_pct': 0.10,
+                'min_periods': 30,  # Reduce from 50 to start trading sooner
+                'min_confidence': 0.4,  # Lower threshold for more signals
+                'rsi_oversold': self.settings.trading.rsi_oversold,
+                'rsi_overbought': self.settings.trading.rsi_overbought,
+                'volume_threshold': 1.2,  # 20% above average volume
             }
             self.strategy = MACrossoverStrategy(strategy_config, self.parameter_manager)
             
@@ -241,7 +246,9 @@ class CryptoTradingBot:
             self.logger.debug(f"Latest price: ${latest_price:.2f}")
             
             # Create synthetic bar (in production, would get actual OHLCV bar)
-            current_time = datetime.now()
+            # Use timezone-aware datetime to match Alpaca data
+            from datetime import timezone
+            current_time = datetime.now(timezone.utc)
             latest_bar = {
                 'timestamp': current_time,
                 'open': latest_price,
@@ -267,9 +274,22 @@ class CryptoTradingBot:
             # Step 4: Generate trading signal
             signal = self.strategy.generate_signal(featured_data)
             
+            # Log signal generation details
             if signal:
-                self.logger.info(f"Signal generated: {signal.signal_type.value} @ {signal.price}")
-                
+                self.logger.info(f"🎯 Signal generated: {signal.signal_type.value} @ ${signal.price:.2f} (confidence: {signal.confidence:.2f})")
+                self.logger.info(f"Signal reason: {signal.reason}")
+            else:
+                self.logger.debug("No signal generated this cycle")
+                # Log current MA status for debugging
+                if len(featured_data) > 0:
+                    latest = featured_data.iloc[-1]
+                    if 'sma_fast' in latest and 'sma_slow' in latest:
+                        fast_ma = latest['sma_fast']
+                        slow_ma = latest['sma_slow']
+                        rsi = latest.get('rsi', 'N/A')
+                        self.logger.debug(f"Current: Fast MA={fast_ma:.2f}, Slow MA={slow_ma:.2f}, RSI={rsi}, Position={self.strategy.get_position_summary()}")
+            
+            if signal:
                 # Record signal
                 self.performance_tracker.record_signal(signal.to_dict())
                 self.last_signal_time = current_time
