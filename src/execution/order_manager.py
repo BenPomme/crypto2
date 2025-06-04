@@ -140,14 +140,16 @@ class OrderManager:
                     timestamp=datetime.now()
                 )
             
-            # Prepare order parameters
+            # Prepare order parameters for crypto trading
             order_params = {
                 'symbol': symbol,
                 'qty': quantity,
                 'side': side.value,
-                'type': order_type.value,
-                'time_in_force': time_in_force
+                'type': order_type.value
             }
+            
+            # Note: Crypto orders on Alpaca don't support time_in_force parameter
+            # Only add time_in_force for non-crypto symbols if needed in the future
             
             if client_order_id:
                 order_params['client_order_id'] = client_order_id
@@ -177,7 +179,7 @@ class OrderManager:
                 metadata={
                     'alpaca_order_id': alpaca_order.id,
                     'client_order_id': alpaca_order.client_order_id,
-                    'time_in_force': time_in_force
+                    'order_class': 'crypto'
                 }
             )
             
