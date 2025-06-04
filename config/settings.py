@@ -35,7 +35,7 @@ class FirebaseSettings(BaseSettings):
 class TradingSettings(BaseSettings):
     """Trading configuration"""
     # Asset to trade
-    symbol: str = Field(default="BTCUSD", env="TRADING_SYMBOL")
+    symbol: str = Field(default="BTC/USD", env="TRADING_SYMBOL")
     
     # Risk management
     max_position_size: float = Field(default=1000.0, env="MAX_POSITION_SIZE")  # USD
