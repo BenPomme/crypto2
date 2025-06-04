@@ -74,12 +74,13 @@ class MACrossoverStrategy(BaseStrategy):
         
         return indicators
     
-    def generate_signal(self, data: pd.DataFrame) -> Optional[TradingSignal]:
+    def generate_signal(self, data: pd.DataFrame, symbol: str = None) -> Optional[TradingSignal]:
         """
         Generate trading signal based on MA crossover
         
         Args:
             data: DataFrame with market data and indicators
+            symbol: Trading symbol for position tracking
             
         Returns:
             TradingSignal or None
@@ -113,18 +114,21 @@ class MACrossoverStrategy(BaseStrategy):
             current_price = latest['close']
             timestamp = latest.name if hasattr(latest, 'name') else datetime.now()
             
+            # Use provided symbol or fallback to config
+            trading_symbol = symbol or self.config.get('symbol', 'BTCUSD')
+            
             # Check for buy signal (golden cross)
-            if golden_cross and self.is_flat():
-                signal = self._evaluate_buy_signal(latest, data)
+            if golden_cross and self.is_flat(trading_symbol):
+                signal = self._evaluate_buy_signal(latest, data, trading_symbol)
                 if signal:
                     self.log_signal(signal)
                     return signal
             
             # Check for sell signal (death cross) - only if we have a position to close
-            elif death_cross and self.is_long() and self.config['exit_on_reverse_cross']:
+            elif death_cross and self.is_long(trading_symbol) and self.config['exit_on_reverse_cross']:
                 signal = TradingSignal(
                     signal_type=SignalType.CLOSE_LONG,
-                    symbol=self.config.get('symbol', 'BTCUSD'),
+                    symbol=trading_symbol,
                     timestamp=timestamp,
                     price=current_price,
                     confidence=0.7,
@@ -139,8 +143,8 @@ class MACrossoverStrategy(BaseStrategy):
                 return signal
             
             # Check for stop loss or take profit
-            if not self.is_flat():
-                exit_signal = self._check_exit_conditions(latest)
+            if not self.is_flat(trading_symbol):
+                exit_signal = self._check_exit_conditions(latest, trading_symbol)
                 if exit_signal:
                     self.log_signal(exit_signal)
                     return exit_signal
@@ -165,13 +169,14 @@ class MACrossoverStrategy(BaseStrategy):
                 
                 logger.info(f"Updated MA periods: {self.fast_period}/{self.slow_period}")
     
-    def _evaluate_buy_signal(self, latest: pd.Series, data: pd.DataFrame) -> Optional[TradingSignal]:
+    def _evaluate_buy_signal(self, latest: pd.Series, data: pd.DataFrame, symbol: str) -> Optional[TradingSignal]:
         """
         Evaluate buy signal with additional filters
         
         Args:
             latest: Latest data point
             data: Full data DataFrame
+            symbol: Trading symbol
             
         Returns:
             TradingSignal or None
@@ -230,7 +235,7 @@ class MACrossoverStrategy(BaseStrategy):
         
         return TradingSignal(
             signal_type=SignalType.BUY,
-            symbol=self.config.get('symbol', 'BTCUSD'),
+            symbol=symbol,
             timestamp=timestamp,
             price=current_price,
             confidence=confidence,
@@ -244,32 +249,35 @@ class MACrossoverStrategy(BaseStrategy):
             }
         )
     
-    def _check_exit_conditions(self, latest: pd.Series) -> Optional[TradingSignal]:
+    def _check_exit_conditions(self, latest: pd.Series, symbol: str) -> Optional[TradingSignal]:
         """
         Check for stop loss or take profit conditions
         
         Args:
             latest: Latest data point
+            symbol: Trading symbol
             
         Returns:
             TradingSignal or None
         """
-        if self.entry_price is None or self.is_flat():
+        # Use symbol-specific position tracking
+        entry_price = self.get_symbol_entry_price(symbol)
+        if entry_price is None or self.is_flat(symbol):
             return None
         
         current_price = latest['close']
         timestamp = latest.name if hasattr(latest, 'name') else datetime.now()
         
-        # Calculate current P&L percentage
-        pnl_pct = self.get_unrealized_pnl_pct(current_price)
+        # Calculate current P&L percentage for this symbol
+        pnl_pct = self.get_unrealized_pnl_pct(current_price, symbol)
         if pnl_pct is None:
             return None
         
         # Check stop loss
         if self.config['stop_loss_pct'] and pnl_pct <= -abs(self.config['stop_loss_pct']):
             return TradingSignal(
-                signal_type=SignalType.CLOSE_LONG if self.is_long() else SignalType.CLOSE_SHORT,
-                symbol=self.config.get('symbol', 'BTCUSD'),
+                signal_type=SignalType.CLOSE_LONG if self.is_long(symbol) else SignalType.CLOSE_SHORT,
+                symbol=symbol,
                 timestamp=timestamp,
                 price=current_price,
                 confidence=0.9,
@@ -277,15 +285,15 @@ class MACrossoverStrategy(BaseStrategy):
                 metadata={
                     'exit_type': 'stop_loss',
                     'pnl_pct': pnl_pct,
-                    'entry_price': self.entry_price
+                    'entry_price': entry_price
                 }
             )
         
         # Check take profit
         if self.config['take_profit_pct'] and pnl_pct >= self.config['take_profit_pct']:
             return TradingSignal(
-                signal_type=SignalType.CLOSE_LONG if self.is_long() else SignalType.CLOSE_SHORT,
-                symbol=self.config.get('symbol', 'BTCUSD'),
+                signal_type=SignalType.CLOSE_LONG if self.is_long(symbol) else SignalType.CLOSE_SHORT,
+                symbol=symbol,
                 timestamp=timestamp,
                 price=current_price,
                 confidence=0.8,
@@ -293,7 +301,7 @@ class MACrossoverStrategy(BaseStrategy):
                 metadata={
                     'exit_type': 'take_profit',
                     'pnl_pct': pnl_pct,
-                    'entry_price': self.entry_price
+                    'entry_price': entry_price
                 }
             )
         

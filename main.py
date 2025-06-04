@@ -97,7 +97,6 @@ class CryptoTradingBot:
             self.feature_engineer = FeatureEngineer(feature_config)
             
             strategy_config = {
-                'symbol': symbols[0],  # Primary symbol for strategy
                 'volume_confirmation': True,
                 'stop_loss_pct': 0.02,  # Match executor config
                 'take_profit_pct': 0.06,  # Match executor config
@@ -109,11 +108,11 @@ class CryptoTradingBot:
             }
             self.strategy = MACrossoverStrategy(strategy_config, self.parameter_manager)
             
-            # Risk manager - Leverage-optimized risk settings
+            # Risk manager - Multi-symbol risk settings (4 crypto pairs)
             risk_config = {
-                'max_position_size': 0.5,  # 50% max position for single pair strategy
+                'max_position_size': 0.4,  # 40% max position per symbol (4 symbols = 160% total exposure)
                 'max_daily_loss': 0.06,    # 6% max daily loss
-                'risk_per_trade': 0.02,    # 2% risk per trade (leverage amplifies gains)
+                'risk_per_trade': 0.02,    # 2% risk per trade
             }
             self.risk_manager = RiskManager(risk_config)
             
@@ -313,15 +312,7 @@ class CryptoTradingBot:
             featured_data = self.feature_engineer.engineer_features(market_data)
             
             # Step 4: Generate trading signal for this symbol
-            # Temporarily update strategy symbol for this calculation
-            original_symbol = self.strategy.config.get('symbol')
-            self.strategy.config['symbol'] = symbol
-            
-            signal = self.strategy.generate_signal(featured_data)
-            
-            # Restore original symbol
-            if original_symbol:
-                self.strategy.config['symbol'] = original_symbol
+            signal = self.strategy.generate_signal(featured_data, symbol)
             
             # Log signal generation details
             if signal:
@@ -335,7 +326,7 @@ class CryptoTradingBot:
                         fast_ma = latest['sma_fast']
                         slow_ma = latest['sma_slow']
                         rsi = latest.get('rsi', 'N/A')
-                        position = "FLAT" if self.strategy.is_flat() else ("LONG" if self.strategy.is_long() else "SHORT")
+                        position = "FLAT" if self.strategy.is_flat(symbol) else ("LONG" if self.strategy.is_long(symbol) else "SHORT")
                         
                         # Log every 5 cycles to avoid spam
                         if self.cycle_count % 5 == 0:
