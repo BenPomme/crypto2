@@ -334,7 +334,7 @@ class FeatureEngineer:
         
         # Fill NaN values with appropriate defaults
         numeric_columns = result_df.select_dtypes(include=[np.number]).columns
-        result_df[numeric_columns] = result_df[numeric_columns].fillna(method='ffill').fillna(0)
+        result_df[numeric_columns] = result_df[numeric_columns].ffill().fillna(0)
         
         logger.info(f"Feature engineering completed. Added {len(result_df.columns) - len(df.columns)} features")
         

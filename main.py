@@ -287,7 +287,8 @@ class CryptoTradingBot:
                         fast_ma = latest['sma_fast']
                         slow_ma = latest['sma_slow']
                         rsi = latest.get('rsi', 'N/A')
-                        self.logger.debug(f"Current: Fast MA={fast_ma:.2f}, Slow MA={slow_ma:.2f}, RSI={rsi}, Position={self.strategy.get_position_summary()}")
+                        position = "FLAT" if self.strategy.is_flat() else ("LONG" if self.strategy.is_long() else "SHORT")
+                        self.logger.debug(f"Current: Fast MA={fast_ma:.2f}, Slow MA={slow_ma:.2f}, RSI={rsi}, Position={position}")
             
             if signal:
                 # Record signal

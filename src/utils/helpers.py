@@ -294,7 +294,7 @@ def clean_dataframe(df: pd.DataFrame) -> pd.DataFrame:
     df = df.replace([np.inf, -np.inf], np.nan)
     
     # Forward fill then backward fill NaN values
-    df = df.fillna(method='ffill').fillna(method='bfill')
+    df = df.ffill().bfill()
     
     # Drop any remaining NaN rows
     df = df.dropna()
