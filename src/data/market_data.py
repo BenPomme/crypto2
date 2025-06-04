@@ -38,10 +38,14 @@ class AlpacaDataProvider(MarketDataProvider):
     
     def __init__(self):
         settings = get_settings()
+        
+        # Ensure base URL doesn't end with /v2 to prevent duplication
+        base_url = settings.alpaca.endpoint.rstrip('/v2').rstrip('/')
+        
         self.api = REST(
             key_id=settings.alpaca.key,
             secret_key=settings.alpaca.secret,
-            base_url=settings.alpaca.endpoint,
+            base_url=base_url,
             api_version='v2'
         )
         
