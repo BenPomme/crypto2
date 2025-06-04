@@ -83,6 +83,7 @@ The strategy combines multiple signal types:
    - `indicators.py` - Technical indicators using pandas-ta (MA, RSI, Bollinger Bands, etc.)
    - `feature_engineering.py` - Comprehensive feature creation from market data
    - `ma_crossover_strategy.py` - Baseline MA crossover strategy with filters
+   - `parameter_manager.py` - ML-optimizable parameter management system
 
 3. **Risk Management** (`src/risk/`)
    - `risk_manager.py` - Multi-layer risk checking and position limits
@@ -100,6 +101,26 @@ The strategy combines multiple signal types:
 6. **Main System** 
    - `main.py` - Complete trading bot orchestrating all modules
    - `config/settings.py` - Environment-based configuration management
+
+### Recent Fixes ✅
+
+**Alpaca API Connection Issue (RESOLVED)**
+- **Problem**: API URLs were duplicated (/v2/v2/account) causing 404 errors
+- **Root Cause**: Both `base_url` (containing /v2) and `api_version='v2'` specified
+- **Fix**: Removed `api_version='v2'` parameter from AlpacaDataProvider initialization
+- **Status**: Fixed in commit `8dd6a92` and deployed to Railway
+
+**Missing Dependency Issue (RESOLVED)**
+- **Problem**: ModuleNotFoundError: No module named 'pydantic_settings'
+- **Root Cause**: pydantic-settings package missing from requirements.txt
+- **Fix**: Added pydantic-settings to requirements.txt
+- **Status**: Fixed in commit `edfc1e3` and deployed to Railway
+
+**pandas_ta/numpy Compatibility Issue (RESOLVED)**
+- **Problem**: ImportError: cannot import name 'NaN' from 'numpy'
+- **Root Cause**: pandas_ta incompatible with numpy 2.0+ (NaN deprecated → nan)
+- **Fix**: Pin numpy<2.0.0 and use pandas-ta>=0.3.14b0 for compatibility
+- **Status**: Fixed in commit `281b3f9` and deploying to Railway
 
 ### Testing Framework ✅
 - Comprehensive test suite with pytest
@@ -173,4 +194,4 @@ railway redeploy
 - `main.py` - Entry point for the complete trading system
 - `src/` - All source code organized by module (data, strategy, risk, execution, monitoring)
 - `tests/` - Comprehensive test suite for all modules
-- `config/` - Configuration management with environment variables
+- `config/` - Configuration management with environment variables# Environment variables updated Wed Jun  4 12:20:42 CEST 2025
