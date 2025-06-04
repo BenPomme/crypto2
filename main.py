@@ -73,6 +73,11 @@ class CryptoTradingBot:
             if not self.data_provider.validate_connection():
                 raise RuntimeError("Failed to connect to Alpaca API")
             
+            # Parse trading symbols - Support multiple symbols
+            symbols = [s.strip() for s in self.settings.trading.symbol.split(',')]
+            self.trading_symbols = symbols
+            self.logger.info(f"Trading symbols: {symbols}")
+            
             # Data buffers - one per symbol
             buffer_size = self.config.get('buffer_size', 1000)
             self.data_buffers = {}
@@ -90,11 +95,6 @@ class CryptoTradingBot:
                 'rsi_period': self.settings.trading.rsi_period,
             }
             self.feature_engineer = FeatureEngineer(feature_config)
-            
-            # Strategy with dynamic parameters - Support multiple symbols
-            symbols = [s.strip() for s in self.settings.trading.symbol.split(',')]
-            self.trading_symbols = symbols
-            self.logger.info(f"Trading symbols: {symbols}")
             
             strategy_config = {
                 'symbol': symbols[0],  # Primary symbol for strategy
@@ -266,6 +266,17 @@ class CryptoTradingBot:
     def _execute_symbol_cycle(self, symbol: str) -> None:
         """Execute trading cycle for a specific symbol"""
         try:
+            # Step 0: Check if market is open for this symbol
+            if not self.data_provider.is_market_open(symbol):
+                is_crypto = self.data_provider.is_crypto_symbol(symbol)
+                symbol_type = "crypto" if is_crypto else "stock"
+                
+                # Log market closure (but only every 10 cycles to avoid spam)
+                if self.cycle_count % 10 == 0:
+                    self.logger.info(f"⏰ Market closed for {symbol_type} symbol {symbol}, skipping trading cycle")
+                
+                return
+            
             # Step 1: Get latest market data
             self.logger.debug(f"Getting latest price for {symbol}")
             latest_price = self.data_provider.get_latest_price(symbol)
@@ -389,6 +400,17 @@ class CryptoTradingBot:
             # Get execution stats
             execution_stats = self.trade_executor.get_execution_stats()
             
+            # Get market status for symbols
+            market_status = []
+            for symbol in self.trading_symbols:
+                is_open = self.data_provider.is_market_open(symbol)
+                is_crypto = self.data_provider.is_crypto_symbol(symbol)
+                symbol_type = "crypto" if is_crypto else "stock"
+                status = "open" if is_open else "closed"
+                market_status.append(f"{symbol}({symbol_type}):{status}")
+            
+            market_info = ", ".join(market_status)
+            
             self.logger.info(
                 f"Status - Cycle: {self.cycle_count}, "
                 f"Portfolio: ${account_info.get('portfolio_value', 0):.2f}, "
@@ -396,6 +418,7 @@ class CryptoTradingBot:
                 f"Trades: {performance.get('num_trades', 0)}, "
                 f"Win Rate: {performance.get('win_rate', 0):.1%}, "
                 f"Buffers: [{buffer_info}], "
+                f"Markets: [{market_info}], "
                 f"Success Rate: {execution_stats.get('success_rate', 0):.1%}"
             )
             

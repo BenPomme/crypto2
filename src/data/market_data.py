@@ -7,6 +7,7 @@ from datetime import datetime, timedelta
 from typing import Optional, Dict, Any, List
 from abc import ABC, abstractmethod
 import logging
+import pytz
 from alpaca_trade_api import REST, TimeFrame
 from alpaca_trade_api.common import URL
 
@@ -29,8 +30,13 @@ class MarketDataProvider(ABC):
         pass
     
     @abstractmethod
-    def is_market_open(self) -> bool:
-        """Check if market is open (crypto markets are always open)"""
+    def is_market_open(self, symbol: Optional[str] = None) -> bool:
+        """Check if market is open for given symbol"""
+        pass
+    
+    @abstractmethod
+    def is_crypto_symbol(self, symbol: str) -> bool:
+        """Check if symbol is a crypto pair"""
         pass
 
 class AlpacaDataProvider(MarketDataProvider):
@@ -56,6 +62,18 @@ class AlpacaDataProvider(MarketDataProvider):
             "15Min": TimeFrame(15, TimeFrame.Minute),
             "1Hour": TimeFrame.Hour,
             "1Day": TimeFrame.Day
+        }
+        
+        # Timezone setup for market hours
+        self.us_eastern = pytz.timezone('US/Eastern')
+        self.utc = pytz.UTC
+        
+        # Known crypto symbols (common crypto pairs on Alpaca)
+        self.crypto_symbols = {
+            'BTC/USD', 'ETH/USD', 'LTC/USD', 'BCH/USD', 'DOGE/USD',
+            'ADA/USD', 'DOT/USD', 'UNI/USD', 'LINK/USD', 'AAVE/USD',
+            'BTCUSD', 'ETHUSD', 'LTCUSD', 'BCHUSD', 'DOGEUSD',
+            'ADAUSD', 'DOTUSD', 'UNIUSD', 'LINKUSD', 'AAVEUSD'
         }
         
         logger.info("Alpaca data provider initialized")
@@ -157,9 +175,80 @@ class AlpacaDataProvider(MarketDataProvider):
             logger.error(f"Error getting latest price for {symbol}: {e}")
             raise
     
-    def is_market_open(self) -> bool:
-        """Crypto markets are always open"""
-        return True
+    def is_crypto_symbol(self, symbol: str) -> bool:
+        """
+        Check if symbol is a crypto pair
+        
+        Args:
+            symbol: Trading symbol to check
+            
+        Returns:
+            True if symbol is a crypto pair
+        """
+        # Normalize symbol format
+        normalized = symbol.upper().replace('/', '')
+        with_slash = symbol.upper()
+        
+        return (normalized in self.crypto_symbols or 
+                with_slash in self.crypto_symbols or
+                any(crypto in symbol.upper() for crypto in ['BTC', 'ETH', 'LTC', 'BCH', 'DOGE', 'ADA', 'DOT', 'UNI', 'LINK', 'AAVE']))
+    
+    def is_us_market_open(self, include_extended_hours: bool = True) -> bool:
+        """
+        Check if US stock market is currently open
+        
+        Args:
+            include_extended_hours: Include pre-market and after-hours trading
+            
+        Returns:
+            True if US market is open
+        """
+        try:
+            # Get current time in US Eastern timezone
+            now_utc = datetime.now(self.utc)
+            now_et = now_utc.astimezone(self.us_eastern)
+            
+            # Check if it's a weekday (Monday=0, Sunday=6)
+            if now_et.weekday() >= 5:  # Saturday or Sunday
+                return False
+            
+            # Market hours in ET
+            if include_extended_hours:
+                # Extended hours: 4:00 AM - 8:00 PM ET
+                market_open = now_et.replace(hour=4, minute=0, second=0, microsecond=0)
+                market_close = now_et.replace(hour=20, minute=0, second=0, microsecond=0)
+            else:
+                # Regular hours: 9:30 AM - 4:00 PM ET
+                market_open = now_et.replace(hour=9, minute=30, second=0, microsecond=0)
+                market_close = now_et.replace(hour=16, minute=0, second=0, microsecond=0)
+            
+            return market_open <= now_et <= market_close
+            
+        except Exception as e:
+            logger.warning(f"Error checking market hours: {e}")
+            # Default to open to avoid blocking trades due to timezone issues
+            return True
+    
+    def is_market_open(self, symbol: Optional[str] = None) -> bool:
+        """
+        Check if market is open for given symbol
+        
+        Args:
+            symbol: Trading symbol to check. If None, checks general market status
+            
+        Returns:
+            True if market is open for the symbol
+        """
+        if symbol is None:
+            # Default to US market check
+            return self.is_us_market_open()
+        
+        if self.is_crypto_symbol(symbol):
+            # Crypto markets are always open
+            return True
+        else:
+            # Stock market - check US market hours
+            return self.is_us_market_open()
     
     def get_account_info(self) -> Dict[str, Any]:
         """Get account information"""
