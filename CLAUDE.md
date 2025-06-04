@@ -13,7 +13,8 @@ This repository contains the design and implementation plan for a crypto trading
 
 ## GOLDEN PROJECT RULE
 
-Never hardcode data, or use fake data, or use hardcoded data as fallback for trading. All data and numbers and calculations must be real and functional. 
+**No Hardcoded Data** Never hardcode data, or use fake data, or use hardcoded data as fallback for trading. All data and numbers and calculations must be real and functional. 
+**Deployments** Handle Deployments yourself by deploying to Main in Github, which will push to railway. 
 
 ## Architecture Components
 
@@ -131,6 +132,39 @@ python main.py
 black src/ tests/
 flake8 src/ tests/
 ```
+
+## Railway Deployment & Monitoring
+
+**Railway CLI Setup:**
+```bash
+# CLI is installed, token is configured in .env.local
+export RAILWAY_TOKEN=800e9ae8-5270-4fef-821c-3038a351a89b
+railway link --project satisfied-commitment
+```
+
+**Monitoring Commands:**
+```bash
+# Check deployment status
+railway status
+
+# Stream live logs
+railway logs --follow
+
+# Check build logs
+railway logs --build
+
+# Check deployment logs  
+railway logs --deployment
+
+# Redeploy latest
+railway redeploy
+```
+
+**Deployment Process:**
+1. Make changes to code
+2. Commit and push to main branch
+3. Railway auto-deploys via GitHub integration
+4. Monitor with `railway logs --follow`
 
 ## File Structure Context
 
