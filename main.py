@@ -129,8 +129,20 @@ class CryptoTradingBot:
         self.logger.info("Starting Crypto Trading Bot")
         
         try:
-            # Load initial market data
-            self._load_initial_data()
+            # Load initial market data with retry logic
+            max_retries = 3
+            for attempt in range(max_retries):
+                try:
+                    self._load_initial_data()
+                    break
+                except Exception as e:
+                    if attempt < max_retries - 1:
+                        self.logger.warning(f"Data loading attempt {attempt + 1} failed: {e}, retrying...")
+                        time.sleep(10)
+                    else:
+                        raise
+            
+            self.logger.info("✅ Trading bot successfully initialized and ready")
             
             # Start main trading loop
             self.running = True

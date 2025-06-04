@@ -35,7 +35,7 @@ RUN chown -R crypto_trader:crypto_trader /app
 USER crypto_trader
 
 # Health check
-HEALTHCHECK --interval=30s --timeout=10s --start-period=60s --retries=3 \
+HEALTHCHECK --interval=30s --timeout=10s --start-period=120s --retries=5 \
     CMD python -c "import sys; sys.exit(0)"
 
 # Default command
