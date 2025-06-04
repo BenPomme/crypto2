@@ -114,8 +114,15 @@ class CryptoTradingBot:
             }
             self.trade_executor = TradeExecutor(self.risk_manager, executor_config)
             
-            # Performance tracker
-            initial_capital = self.config.get('initial_capital', 10000.0)
+            # Performance tracker - get actual account balance
+            try:
+                account_info = self.data_provider.get_account_info()
+                initial_capital = account_info.get('portfolio_value', 10000.0)
+                self.logger.info(f"Using actual account balance: ${initial_capital:,.2f}")
+            except Exception as e:
+                self.logger.warning(f"Could not get account balance, using default: {e}")
+                initial_capital = self.config.get('initial_capital', 10000.0)
+            
             self.performance_tracker = PerformanceTracker(initial_capital)
             
             self.logger.info("All components initialized successfully")
@@ -190,16 +197,19 @@ class CryptoTradingBot:
         
         # Trading loop configuration
         loop_interval = self.config.get('loop_interval', 60)  # 1 minute
+        self.logger.info(f"Trading loop will run every {loop_interval} seconds")
         
         while self.running:
             loop_start = time.time()
             
             try:
                 # Execute one trading cycle
+                self.logger.debug(f"Starting trading cycle {self.cycle_count + 1}")
                 self._execute_trading_cycle()
                 
                 # Increment cycle counter
                 self.cycle_count += 1
+                self.logger.info(f"Completed trading cycle {self.cycle_count}")
                 
                 # Log periodic status
                 if self.cycle_count % 10 == 0:
@@ -217,6 +227,7 @@ class CryptoTradingBot:
             elapsed = time.time() - loop_start
             sleep_time = max(0, loop_interval - elapsed)
             
+            self.logger.debug(f"Cycle took {elapsed:.2f}s, sleeping for {sleep_time:.2f}s")
             if sleep_time > 0:
                 time.sleep(sleep_time)
     
@@ -225,7 +236,9 @@ class CryptoTradingBot:
         try:
             # Step 1: Get latest market data
             symbol = self.settings.trading.symbol
+            self.logger.debug(f"Getting latest price for {symbol}")
             latest_price = self.data_provider.get_latest_price(symbol)
+            self.logger.debug(f"Latest price: ${latest_price:.2f}")
             
             # Create synthetic bar (in production, would get actual OHLCV bar)
             current_time = datetime.now()
