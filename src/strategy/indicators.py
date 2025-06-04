@@ -19,17 +19,32 @@ class TechnicalIndicators:
     @staticmethod
     def simple_moving_average(data: pd.Series, period: int) -> pd.Series:
         """Calculate Simple Moving Average"""
-        return ta.sma(data, length=period)
+        try:
+            result = ta.sma(data, length=period)
+            return result if result is not None else pd.Series(dtype='float64', index=data.index)
+        except Exception as e:
+            logger.error(f"Error calculating SMA: {e}")
+            return pd.Series(dtype='float64', index=data.index)
     
     @staticmethod
     def exponential_moving_average(data: pd.Series, period: int) -> pd.Series:
         """Calculate Exponential Moving Average"""
-        return ta.ema(data, length=period)
+        try:
+            result = ta.ema(data, length=period)
+            return result if result is not None else pd.Series(dtype='float64', index=data.index)
+        except Exception as e:
+            logger.error(f"Error calculating EMA: {e}")
+            return pd.Series(dtype='float64', index=data.index)
     
     @staticmethod
     def relative_strength_index(data: pd.Series, period: int = 14) -> pd.Series:
         """Calculate RSI"""
-        return ta.rsi(data, length=period)
+        try:
+            result = ta.rsi(data, length=period)
+            return result if result is not None else pd.Series(50.0, index=data.index, dtype='float64')
+        except Exception as e:
+            logger.error(f"Error calculating RSI: {e}")
+            return pd.Series(50.0, index=data.index, dtype='float64')
     
     @staticmethod
     def bollinger_bands(data: pd.Series, period: int = 20, std: float = 2.0) -> pd.DataFrame:
@@ -58,23 +73,41 @@ class TechnicalIndicators:
     @staticmethod
     def money_flow_index(high: pd.Series, low: pd.Series, close: pd.Series,
                         volume: pd.Series, period: int = 14) -> pd.Series:
-        """Calculate Money Flow Index"""
-        # Ensure all inputs are float64 to prevent dtype warnings
+        """Calculate Money Flow Index - Custom implementation to avoid pandas-ta dtype issues"""
+        # Ensure all inputs are float64
         high = high.astype('float64')
         low = low.astype('float64') 
         close = close.astype('float64')
         volume = volume.astype('float64')
         
         try:
-            result = ta.mfi(high=high, low=low, close=close, volume=volume, length=period)
-            if result is not None:
-                # Explicitly handle the dtype warning by converting to float64
-                return pd.Series(result, dtype='float64', index=high.index)
-            else:
-                return pd.Series(dtype='float64', index=high.index)
+            # Custom MFI calculation to avoid pandas-ta dtype warnings
+            typical_price = (high + low + close) / 3
+            money_flow = typical_price * volume
+            
+            # Calculate positive and negative money flow
+            positive_flow = pd.Series(0.0, index=high.index)
+            negative_flow = pd.Series(0.0, index=high.index)
+            
+            for i in range(1, len(typical_price)):
+                if typical_price.iloc[i] > typical_price.iloc[i-1]:
+                    positive_flow.iloc[i] = money_flow.iloc[i]
+                elif typical_price.iloc[i] < typical_price.iloc[i-1]:
+                    negative_flow.iloc[i] = money_flow.iloc[i]
+            
+            # Calculate money flow ratio and MFI
+            positive_mf = positive_flow.rolling(window=period).sum()
+            negative_mf = negative_flow.rolling(window=period).sum()
+            
+            # Avoid division by zero
+            money_flow_ratio = positive_mf / (negative_mf + 1e-10)
+            mfi = 100 - (100 / (1 + money_flow_ratio))
+            
+            return mfi.fillna(50.0)  # Fill NaN with neutral MFI value
+            
         except Exception as e:
-            logger.error(f"Error calculating MFI: {e}")
-            return pd.Series(dtype='float64', index=high.index)
+            logger.error(f"Error calculating custom MFI: {e}")
+            return pd.Series(50.0, index=high.index, dtype='float64')
     
     @staticmethod
     def stochastic_oscillator(high: pd.Series, low: pd.Series, close: pd.Series,
