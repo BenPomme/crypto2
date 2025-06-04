@@ -320,7 +320,7 @@ class FeatureEngineer:
         logger.info(f"Starting feature engineering for {len(df)} bars")
         
         # Start with technical indicators
-        result_df = self.indicators.calculate_all_indicators(df, self.config)
+        result_df = self.indicators.calculate_all_indicators(df, self.default_config)
         
         # Add various feature categories
         result_df = self.create_price_features(result_df)
