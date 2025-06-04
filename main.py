@@ -279,8 +279,7 @@ class CryptoTradingBot:
                 self.logger.info(f"🎯 Signal generated: {signal.signal_type.value} @ ${signal.price:.2f} (confidence: {signal.confidence:.2f})")
                 self.logger.info(f"Signal reason: {signal.reason}")
             else:
-                self.logger.debug("No signal generated this cycle")
-                # Log current MA status for debugging
+                # Log current MA status for debugging (use INFO level to see in logs)
                 if len(featured_data) > 0:
                     latest = featured_data.iloc[-1]
                     if 'sma_fast' in latest and 'sma_slow' in latest:
@@ -288,7 +287,17 @@ class CryptoTradingBot:
                         slow_ma = latest['sma_slow']
                         rsi = latest.get('rsi', 'N/A')
                         position = "FLAT" if self.strategy.is_flat() else ("LONG" if self.strategy.is_long() else "SHORT")
-                        self.logger.debug(f"Current: Fast MA={fast_ma:.2f}, Slow MA={slow_ma:.2f}, RSI={rsi}, Position={position}")
+                        
+                        # Log every 5 cycles to avoid spam
+                        if self.cycle_count % 5 == 0:
+                            self.logger.info(f"📊 Analysis: Fast MA=${fast_ma:.2f}, Slow MA=${slow_ma:.2f}, RSI={rsi}, Position={position}")
+                            
+                            # Check if we're close to a crossover
+                            ma_diff = fast_ma - slow_ma
+                            if abs(ma_diff) < 5:  # Within $5 of crossover
+                                self.logger.info(f"🔥 Close to crossover! MA difference: ${ma_diff:.2f}")
+                else:
+                    self.logger.debug("No featured data available for analysis")
             
             if signal:
                 # Record signal
