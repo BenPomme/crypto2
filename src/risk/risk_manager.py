@@ -153,6 +153,8 @@ class RiskManager:
         # Extract account values
         account_value = account_info.get('portfolio_value', 0)
         cash_available = account_info.get('cash', 0)
+        buying_power = account_info.get('buying_power', account_value)
+        is_pattern_day_trader = account_info.get('pattern_day_trader', False)
         
         # Perform risk checks
         checks.extend(self._check_account_limits(signal, account_value, cash_available))
@@ -200,22 +202,44 @@ class RiskManager:
                     if len(returns) > 5:
                         volatility = returns.std()
                 
+                # Determine if this is a crypto trade
+                is_crypto = '/' in signal.symbol and ('USD' in signal.symbol or 'USDT' in signal.symbol)
+                
+                # Calculate stop loss price for risk-based sizing
+                stop_loss_price = None
+                if hasattr(signal, 'metadata') and signal.metadata:
+                    stop_loss_price = signal.metadata.get('stop_loss_price')
+                
                 position_size = self.position_sizer.calculate_position_size(
                     account_value=account_value,
                     entry_price=signal.price,
-                    volatility=volatility
+                    volatility=volatility,
+                    buying_power=buying_power,
+                    is_crypto=is_crypto,
+                    is_pattern_day_trader=is_pattern_day_trader,
+                    stop_loss_price=stop_loss_price
                 )
                 
-                # Additional position size validation
-                if position_size.size_usd > cash_available:
+                # Additional position size validation - account for leverage
+                if is_crypto:
+                    # Crypto requires cash (no margin)
+                    required_cash = position_size.size_usd
+                    available_cash = cash_available
+                else:
+                    # Stocks can use buying power (includes margin)
+                    required_cash = position_size.size_usd
+                    available_cash = buying_power
+                
+                if required_cash > available_cash:
                     approved = False
+                    asset_type = "crypto" if is_crypto else "stock"
                     checks.append(RiskCheck(
-                        name="cash_availability",
+                        name="buying_power_check",
                         passed=False,
                         risk_level=RiskLevel.CRITICAL,
-                        message=f"Insufficient cash: need ${position_size.size_usd:.2f}, have ${cash_available:.2f}",
-                        value=position_size.size_usd,
-                        limit=cash_available
+                        message=f"Insufficient {asset_type} buying power: need ${required_cash:.2f}, have ${available_cash:.2f}",
+                        value=required_cash,
+                        limit=available_cash
                     ))
                 
             except Exception as e:

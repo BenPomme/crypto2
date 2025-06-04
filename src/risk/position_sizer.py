@@ -16,6 +16,7 @@ class SizingMethod(Enum):
     PERCENT_RISK = "percent_risk"
     VOLATILITY_ADJUSTED = "volatility_adjusted"
     KELLY_CRITERION = "kelly_criterion"
+    LEVERAGE_AWARE = "leverage_aware"
 
 @dataclass
 class PositionSizeResult:
@@ -54,14 +55,17 @@ class PositionSizer:
         
         # Default configuration
         self.default_config = {
-            'method': SizingMethod.PERCENT_RISK,
-            'risk_per_trade': 0.02,  # 2% of capital per trade
-            'max_position_size': 0.25,  # 25% max of capital per position
+            'method': SizingMethod.LEVERAGE_AWARE,  # Use leverage-aware sizing
+            'risk_per_trade': 0.04,  # 4% of capital per trade (more aggressive)
+            'max_position_size': 0.75,  # 75% max of capital per position with leverage
             'min_position_size': 100,  # Minimum $100 position
             'volatility_lookback': 20,
             'volatility_multiplier': 1.0,
             'kelly_lookback': 100,
-            'max_leverage': 1.0,  # No leverage for crypto
+            'max_leverage': 2.0,  # Smart leverage usage
+            'crypto_max_position': 0.5,  # 50% max for crypto (no margin)
+            'stock_max_position': 1.0,   # 100% max for stocks (with margin)
+            'target_utilization': 0.8,   # Use 80% of available buying power
         }
         
         self.config = {**self.default_config, **self.config}
@@ -73,7 +77,10 @@ class PositionSizer:
                               stop_loss_price: Optional[float] = None,
                               volatility: Optional[float] = None,
                               win_rate: Optional[float] = None,
-                              avg_win_loss_ratio: Optional[float] = None) -> PositionSizeResult:
+                              avg_win_loss_ratio: Optional[float] = None,
+                              buying_power: Optional[float] = None,
+                              is_crypto: bool = True,
+                              is_pattern_day_trader: bool = False) -> PositionSizeResult:
         """
         Calculate position size based on configured method
         
@@ -84,6 +91,9 @@ class PositionSizer:
             volatility: Asset volatility (for volatility-adjusted sizing)
             win_rate: Historical win rate (for Kelly criterion)
             avg_win_loss_ratio: Average win/loss ratio (for Kelly criterion)
+            buying_power: Available buying power (includes margin)
+            is_crypto: Whether this is a crypto trade (no margin available)
+            is_pattern_day_trader: Whether account has PDT status (4x leverage)
             
         Returns:
             PositionSizeResult with calculated size
@@ -99,9 +109,13 @@ class PositionSizer:
         elif method == SizingMethod.KELLY_CRITERION:
             return self._kelly_criterion_sizing(account_value, entry_price, 
                                               win_rate, avg_win_loss_ratio)
+        elif method == SizingMethod.LEVERAGE_AWARE:
+            return self._leverage_aware_sizing(account_value, entry_price, stop_loss_price,
+                                             buying_power, is_crypto, is_pattern_day_trader)
         else:
-            logger.warning(f"Unknown sizing method: {method}, using percent risk")
-            return self._percent_risk_sizing(account_value, entry_price, stop_loss_price)
+            logger.warning(f"Unknown sizing method: {method}, using leverage aware")
+            return self._leverage_aware_sizing(account_value, entry_price, stop_loss_price,
+                                             buying_power, is_crypto, is_pattern_day_trader)
     
     def _fixed_dollar_sizing(self, account_value: float, entry_price: float) -> PositionSizeResult:
         """
@@ -364,3 +378,116 @@ class PositionSizer:
             take_profit_price = entry_price - reward_distance
         
         return max(take_profit_price, 0.01)  # Ensure positive price
+    
+    def _leverage_aware_sizing(self, account_value: float, entry_price: float,
+                              stop_loss_price: Optional[float] = None,
+                              buying_power: Optional[float] = None,
+                              is_crypto: bool = True,
+                              is_pattern_day_trader: bool = False) -> PositionSizeResult:
+        """
+        Leverage-aware position sizing that optimizes use of buying power
+        
+        Strategy:
+        - Crypto: Use cash only (no margin), up to 50% of portfolio
+        - Stocks: Use margin intelligently, up to 100% of portfolio value
+        - PDT accounts: Access to 4x intraday buying power
+        
+        Args:
+            account_value: Total account value
+            entry_price: Entry price
+            stop_loss_price: Stop loss price
+            buying_power: Available buying power
+            is_crypto: Whether this is crypto (no margin)
+            is_pattern_day_trader: PDT status for enhanced leverage
+            
+        Returns:
+            PositionSizeResult with optimized size
+        """
+        # Use buying power if available, otherwise fall back to account value
+        available_capital = buying_power if buying_power else account_value
+        
+        # Calculate risk-based position size
+        risk_per_trade = self.config['risk_per_trade']
+        risk_amount = account_value * risk_per_trade
+        
+        # Calculate position size based on stop loss
+        if stop_loss_price and entry_price != stop_loss_price:
+            price_risk = abs(entry_price - stop_loss_price) / entry_price
+            if price_risk > 0:
+                # Size position so maximum loss equals risk_amount
+                max_position_value = risk_amount / price_risk
+            else:
+                max_position_value = available_capital * 0.1  # Fallback to 10%
+        else:
+            # No stop loss defined, use default 4% price risk assumption
+            default_price_risk = 0.04
+            max_position_value = risk_amount / default_price_risk
+        
+        # Apply asset-specific position limits
+        if is_crypto:
+            # Crypto: No margin, limit to cash percentage
+            max_crypto_position = account_value * self.config['crypto_max_position']
+            position_value = min(max_position_value, max_crypto_position)
+            leverage_used = 1.0
+            logger.info(f"Crypto position sizing: max_risk_based=${max_position_value:.0f}, "
+                       f"max_crypto_limit=${max_crypto_position:.0f}")
+        else:
+            # Stocks: Can use margin
+            if is_pattern_day_trader:
+                # PDT: 4x intraday buying power
+                max_leveraged_position = available_capital * self.config['target_utilization']
+                effective_leverage = min(4.0, self.config['max_leverage'])
+            else:
+                # Regular margin: 2x buying power
+                max_leveraged_position = available_capital * self.config['target_utilization']
+                effective_leverage = min(2.0, self.config['max_leverage'])
+            
+            # Don't exceed portfolio percentage limit
+            max_portfolio_position = account_value * self.config['stock_max_position']
+            position_value = min(max_position_value, max_leveraged_position, max_portfolio_position)
+            leverage_used = min(position_value / account_value, effective_leverage)
+            
+            logger.info(f"Stock position sizing: max_risk_based=${max_position_value:.0f}, "
+                       f"max_leveraged=${max_leveraged_position:.0f}, "
+                       f"max_portfolio=${max_portfolio_position:.0f}, leverage={leverage_used:.2f}x")
+        
+        # Apply minimum position size
+        min_position = self.config['min_position_size']
+        position_value = max(position_value, min_position)
+        
+        # Calculate position size in units
+        position_units = position_value / entry_price
+        
+        # Calculate actual risk amount
+        if stop_loss_price:
+            actual_risk = position_value * abs(entry_price - stop_loss_price) / entry_price
+        else:
+            actual_risk = position_value * 0.04  # Assume 4% risk
+        
+        # Calculate confidence based on leverage utilization
+        if is_crypto:
+            confidence = min(0.9, position_value / (account_value * 0.3))  # Higher confidence for reasonable crypto positions
+        else:
+            confidence = min(0.95, leverage_used / 2.0)  # Higher confidence with moderate leverage
+        
+        metadata = {
+            'leverage_used': leverage_used,
+            'is_crypto': is_crypto,
+            'is_pattern_day_trader': is_pattern_day_trader,
+            'available_capital': available_capital,
+            'risk_percentage': (actual_risk / account_value) * 100,
+            'position_percentage': (position_value / account_value) * 100
+        }
+        
+        logger.info(f"Leverage-aware sizing: ${position_value:.0f} ({position_units:.6f} units), "
+                   f"risk=${actual_risk:.0f} ({actual_risk/account_value*100:.1f}%), "
+                   f"leverage={leverage_used:.2f}x, confidence={confidence:.2f}")
+        
+        return PositionSizeResult(
+            size_usd=position_value,
+            size_units=position_units,
+            method=SizingMethod.LEVERAGE_AWARE,
+            risk_amount=actual_risk,
+            confidence=confidence,
+            metadata=metadata
+        )
