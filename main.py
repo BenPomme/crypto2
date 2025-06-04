@@ -96,30 +96,32 @@ class CryptoTradingBot:
             strategy_config = {
                 'symbol': symbols[0],  # Primary symbol for strategy
                 'volume_confirmation': True,
-                'stop_loss_pct': 0.05,
-                'take_profit_pct': 0.10,
-                'min_periods': 30,  # Reduce from 50 to start trading sooner
-                'min_confidence': 0.4,  # Lower threshold for more signals
-                'rsi_oversold': self.settings.trading.rsi_oversold,
-                'rsi_overbought': self.settings.trading.rsi_overbought,
-                'volume_threshold': 1.2,  # 20% above average volume
+                'stop_loss_pct': 0.02,  # Match executor config
+                'take_profit_pct': 0.06,  # Match executor config
+                'min_periods': 20,  # Faster signal generation
+                'min_confidence': 0.3,  # Lower threshold for smaller moves
+                'rsi_oversold': 35.0,  # Less extreme RSI levels
+                'rsi_overbought': 65.0,  # Less extreme RSI levels
+                'volume_threshold': 1.1,  # Only 10% above average (easier to meet)
             }
             self.strategy = MACrossoverStrategy(strategy_config, self.parameter_manager)
             
-            # Risk manager - More aggressive for 5-10% monthly target
+            # Risk manager - Leverage-optimized risk settings
             risk_config = {
                 'max_position_size': 0.5,  # 50% max position for single pair strategy
-                'max_daily_loss': 0.08,    # 8% max daily loss
-                'risk_per_trade': 0.04,    # 4% risk per trade (higher for target ROI)
+                'max_daily_loss': 0.06,    # 6% max daily loss
+                'risk_per_trade': 0.02,    # 2% risk per trade (leverage amplifies gains)
             }
             self.risk_manager = RiskManager(risk_config)
             
-            # Trade executor - Optimized for target ROI
+            # Trade executor - Leverage-optimized targets
             executor_config = {
                 'enable_stop_loss': True,
                 'enable_take_profit': True,
-                'default_stop_loss_pct': 0.04,  # Tighter stop loss (4%)
-                'default_take_profit_pct': 0.15, # Higher take profit (15%)
+                'default_stop_loss_pct': 0.02,  # Very tight stop loss (2%)
+                'default_take_profit_pct': 0.06, # Conservative take profit (6%)
+                # With leverage: 6% on $100k = $6k profit, 2% risk = $2k loss
+                # Risk/Reward = 3:1 ratio, much higher win probability
             }
             self.trade_executor = TradeExecutor(self.risk_manager, executor_config)
             

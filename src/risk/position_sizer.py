@@ -56,7 +56,7 @@ class PositionSizer:
         # Default configuration
         self.default_config = {
             'method': SizingMethod.LEVERAGE_AWARE,  # Use leverage-aware sizing
-            'risk_per_trade': 0.04,  # 4% of capital per trade (more aggressive)
+            'risk_per_trade': 0.02,  # 2% of capital per trade (leverage amplifies)
             'max_position_size': 0.75,  # 75% max of capital per position with leverage
             'min_position_size': 100,  # Minimum $100 position
             'volatility_lookback': 20,
