@@ -66,11 +66,18 @@ class FirebaseLogger:
                 logger.info("Using existing Firebase app")
             except ValueError:
                 # Try to initialize with available credentials
-                if has_firebase_key:
+                if has_service_account:
+                    # Use file-based credentials
+                    cred = credentials.ApplicationDefault()
+                elif has_firebase_key:
                     # Use service account key from environment
                     import json
-                    service_account_info = json.loads(os.getenv('FIREBASE_SERVICE_ACCOUNT_KEY'))
-                    cred = credentials.Certificate(service_account_info)
+                    try:
+                        service_account_info = json.loads(os.getenv('FIREBASE_SERVICE_ACCOUNT_KEY'))
+                        cred = credentials.Certificate(service_account_info)
+                    except json.JSONDecodeError as e:
+                        logger.error(f"Invalid JSON in FIREBASE_SERVICE_ACCOUNT_KEY: {e}")
+                        raise
                 else:
                     # Use application default credentials (if available)
                     cred = credentials.ApplicationDefault()
