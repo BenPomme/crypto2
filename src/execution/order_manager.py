@@ -82,8 +82,7 @@ class OrderManager:
         self.api = REST(
             key_id=settings.alpaca.key,
             secret_key=settings.alpaca.secret,
-            base_url=URL(settings.alpaca.endpoint),
-            api_version='v2'
+            base_url=URL(settings.alpaca.endpoint)
         )
         
         # Order tracking
@@ -108,19 +107,17 @@ class OrderManager:
                    order_type: OrderType = OrderType.MARKET,
                    limit_price: Optional[float] = None,
                    stop_price: Optional[float] = None,
-                   time_in_force: str = "GTC",
                    client_order_id: Optional[str] = None) -> OrderResult:
         """
-        Place an order with Alpaca
+        Place a crypto order with Alpaca (time_in_force not supported for crypto)
         
         Args:
-            symbol: Trading symbol
+            symbol: Trading symbol (e.g., BTC/USD)
             side: Buy or sell
             quantity: Order quantity
-            order_type: Order type
+            order_type: Order type (MARKET recommended for crypto)
             limit_price: Limit price (for limit orders)
             stop_price: Stop price (for stop orders)
-            time_in_force: Time in force (GTC, IOC, FOK, DAY)
             client_order_id: Client-side order ID
             
         Returns:
