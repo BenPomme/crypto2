@@ -48,13 +48,25 @@ class TechnicalIndicators:
     @staticmethod
     def on_balance_volume(close: pd.Series, volume: pd.Series) -> pd.Series:
         """Calculate On-Balance Volume"""
-        return ta.obv(close=close, volume=volume)
+        # Ensure inputs are float64 to prevent dtype warnings
+        close = close.astype('float64')
+        volume = volume.astype('float64')
+        
+        result = ta.obv(close=close, volume=volume)
+        return result.astype('float64') if result is not None else pd.Series(dtype='float64')
     
     @staticmethod
     def money_flow_index(high: pd.Series, low: pd.Series, close: pd.Series,
                         volume: pd.Series, period: int = 14) -> pd.Series:
         """Calculate Money Flow Index"""
-        return ta.mfi(high=high, low=low, close=close, volume=volume, length=period)
+        # Ensure all inputs are float64 to prevent dtype warnings
+        high = high.astype('float64')
+        low = low.astype('float64') 
+        close = close.astype('float64')
+        volume = volume.astype('float64')
+        
+        result = ta.mfi(high=high, low=low, close=close, volume=volume, length=period)
+        return result.astype('float64') if result is not None else pd.Series(dtype='float64')
     
     @staticmethod
     def stochastic_oscillator(high: pd.Series, low: pd.Series, close: pd.Series,
