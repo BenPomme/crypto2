@@ -91,7 +91,7 @@ class CryptoTradingBot:
             # Strategy with dynamic parameters - Support multiple symbols
             symbols = [s.strip() for s in self.settings.trading.symbol.split(',')]
             self.trading_symbols = symbols
-            logger.info(f"Trading symbols: {symbols}")
+            self.logger.info(f"Trading symbols: {symbols}")
             
             strategy_config = {
                 'symbol': symbols[0],  # Primary symbol for strategy
