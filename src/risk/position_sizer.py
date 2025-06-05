@@ -63,7 +63,7 @@ class PositionSizer:
             'volatility_multiplier': 1.0,
             'kelly_lookback': 100,
             'max_leverage': 2.0,  # Smart leverage usage
-            'crypto_max_position': 0.4,  # 40% max per crypto pair (4 pairs = 160% max total)
+            'crypto_max_position': 0.30,  # 30% max per crypto pair
             'target_utilization': 0.8,   # Use 80% of available buying power
         }
         
@@ -405,6 +405,8 @@ class PositionSizer:
         # Use buying power for position sizing (includes leverage for crypto)
         available_capital = buying_power if buying_power else account_value
         
+        logger.info(f"Position sizing inputs: account_value=${account_value:.2f}, buying_power=${buying_power:.2f}, available_capital=${available_capital:.2f}")
+        
         # Calculate risk-based position size
         risk_per_trade = self.config['risk_per_trade']
         risk_amount = account_value * risk_per_trade
@@ -426,7 +428,7 @@ class PositionSizer:
         max_crypto_position = account_value * self.config['crypto_max_position']
         
         # Use available buying power as the upper limit
-        max_capital_position = available_capital * 0.95  # Use 95% of buying power, keep 5% buffer
+        max_capital_position = available_capital * 0.80  # Use 80% of buying power, keep 20% buffer
         
         # Use the most restrictive limit
         position_value = min(max_position_value, max_crypto_position, max_capital_position)

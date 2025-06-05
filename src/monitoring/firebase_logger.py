@@ -94,10 +94,14 @@ class FirebaseLogger:
     def _clean_data_for_firestore(self, data: Dict[str, Any]) -> Dict[str, Any]:
         """Clean data to be compatible with Firestore"""
         import numpy as np
+        from ..execution.order_manager import OrderResult
         
         def clean_value(value):
+            # Handle OrderResult objects
+            if isinstance(value, OrderResult):
+                return value.to_dict()
             # Handle numpy types
-            if isinstance(value, (np.bool_, bool)):
+            elif isinstance(value, (np.bool_, bool)):
                 return bool(value)
             elif isinstance(value, (np.integer, np.int64)):
                 return int(value)
