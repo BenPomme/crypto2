@@ -156,6 +156,14 @@ class RiskManager:
         buying_power = account_info.get('buying_power', account_value)
         is_pattern_day_trader = account_info.get('pattern_day_trader', False)
         
+        # Debug account info for cash availability issues
+        logger.info(f"Account info: portfolio_value=${account_value:.2f}, cash=${cash_available:.2f}, buying_power=${buying_power:.2f}")
+        
+        # For paper trading crypto, use portfolio_value as available cash if cash is 0
+        if cash_available == 0 and account_value > 0:
+            cash_available = account_value
+            logger.info(f"Using portfolio_value as available cash for crypto trading: ${cash_available:.2f}")
+        
         # Perform risk checks
         checks.extend(self._check_account_limits(signal, account_value, cash_available))
         checks.extend(self._check_position_limits(signal, current_positions, account_value))
@@ -262,8 +270,14 @@ class RiskManager:
             logger.info(f"Signal APPROVED: {signal.signal_type.value} {signal.symbol} "
                        f"(Risk: {overall_risk.value})")
         else:
+            # Count all failed checks including those added during position sizing
+            all_failed_checks = [check for check in checks if not check.passed]
             logger.warning(f"Signal REJECTED: {signal.signal_type.value} {signal.symbol} "
-                          f"(Risk: {overall_risk.value}, Failures: {len(failed_checks)})")
+                          f"(Risk: {overall_risk.value}, Failures: {len(all_failed_checks)})")
+            
+            # Log specific failure reasons for debugging
+            for check in all_failed_checks:
+                logger.warning(f"  - {check.name}: {check.message}")
         
         return result
     
