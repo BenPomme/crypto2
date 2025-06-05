@@ -302,6 +302,14 @@ class TechnicalIndicators:
                 result_df['bb_upper'] = bb_sma + (bb_std * default_config['bb_std'])
                 result_df['bb_lower'] = bb_sma - (bb_std * default_config['bb_std'])
                 result_df['bb_middle'] = bb_sma
+                
+                # Calculate BB width and position for logging
+                bb_width_pct = ((result_df['bb_upper'].iloc[-1] - result_df['bb_lower'].iloc[-1]) / bb_sma.iloc[-1]) * 100
+                current_price = df['close'].iloc[-1]
+                bb_position = (current_price - result_df['bb_lower'].iloc[-1]) / (result_df['bb_upper'].iloc[-1] - result_df['bb_lower'].iloc[-1])
+                
+                logger.info(f"Bollinger Bands calculated: Upper=${result_df['bb_upper'].iloc[-1]:.2f}, Lower=${result_df['bb_lower'].iloc[-1]:.2f}, Width={bb_width_pct:.1f}%, Position={bb_position:.2f}")
+                
             except Exception as e:
                 logger.warning(f"Skipping Bollinger Bands: {e}")
             
@@ -347,7 +355,7 @@ class TechnicalIndicators:
                 result_df['mfi'] = 100 - (100 / (1 + mfi_ratio))
                 result_df['mfi'] = result_df['mfi'].fillna(50.0)
                 
-                logger.debug(f"Volume indicators added: OBV={result_df['obv'].iloc[-1]:.0f}, MFI={result_df['mfi'].iloc[-1]:.1f}")
+                logger.info(f"Volume indicators calculated: OBV={result_df['obv'].iloc[-1]:.0f}, MFI={result_df['mfi'].iloc[-1]:.1f}, Volume Ratio={result_df['volume_ratio'].iloc[-1]:.2f}")
                 
             except Exception as e:
                 logger.warning(f"Skipping volume analysis: {e}")
@@ -369,7 +377,7 @@ class TechnicalIndicators:
                 result_df['macd_bullish'] = (result_df['macd'] > result_df['macd_signal']).astype(int)
                 result_df['macd_momentum'] = result_df['macd_histogram'].diff()
                 
-                logger.debug(f"MACD indicators added: MACD={result_df['macd'].iloc[-1]:.3f}, Signal={result_df['macd_signal'].iloc[-1]:.3f}")
+                logger.info(f"MACD indicators calculated: MACD={result_df['macd'].iloc[-1]:.3f}, Signal={result_df['macd_signal'].iloc[-1]:.3f}, Histogram={result_df['macd_histogram'].iloc[-1]:.3f}, Bullish={bool(result_df['macd_bullish'].iloc[-1])}")
                 
             except Exception as e:
                 logger.warning(f"Skipping MACD: {e}")
@@ -387,7 +395,17 @@ class TechnicalIndicators:
                 logger.warning(f"Skipping trend strength: {e}")
                 result_df['trend_strength'] = pd.Series(0.5, index=df.index)
             
-            logger.info(f"Calculated indicators for {len(result_df)} bars")
+            # Summary of all enhanced indicators
+            if len(result_df) > 0:
+                latest = result_df.iloc[-1]
+                logger.info(f"📈 ENHANCED INDICATORS SUMMARY:")
+                logger.info(f"   Basic: Fast MA=${latest.get('sma_fast', 'N/A'):.2f}, Slow MA=${latest.get('sma_slow', 'N/A'):.2f}, RSI={latest.get('rsi', 'N/A'):.1f}")
+                logger.info(f"   Volume: OBV={latest.get('obv', 'N/A'):.0f}, MFI={latest.get('mfi', 'N/A'):.1f}, Vol Ratio={latest.get('volume_ratio', 'N/A'):.2f}")
+                logger.info(f"   MACD: {latest.get('macd', 'N/A'):.3f}, Signal={latest.get('macd_signal', 'N/A'):.3f}, Bullish={bool(latest.get('macd_bullish', 0))}")
+                logger.info(f"   Bollinger: Upper=${latest.get('bb_upper', 'N/A'):.2f}, Lower=${latest.get('bb_lower', 'N/A'):.2f}")
+                logger.info(f"   Trend Strength: {latest.get('trend_strength', 'N/A'):.2f}")
+            
+            logger.info(f"✅ Calculated ALL indicators for {len(result_df)} bars")
             
         except Exception as e:
             logger.error(f"Error calculating indicators: {e}")

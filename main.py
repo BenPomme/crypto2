@@ -332,9 +332,25 @@ class CryptoTradingBot:
                         rsi = latest.get('rsi', 'N/A')
                         position = "FLAT" if self.strategy.is_flat(symbol) else ("LONG" if self.strategy.is_long(symbol) else "SHORT")
                         
+                        # Enhanced indicators status
+                        obv = latest.get('obv', 'N/A')
+                        obv_trend = "UP" if latest.get('obv_trend', 0) == 1 else "DOWN"
+                        mfi = latest.get('mfi', 'N/A')
+                        macd = latest.get('macd', 'N/A')
+                        macd_signal = latest.get('macd_signal', 'N/A')
+                        macd_bullish = "BULL" if latest.get('macd_bullish', 0) == 1 else "BEAR"
+                        bb_upper = latest.get('bb_upper', 'N/A')
+                        bb_lower = latest.get('bb_lower', 'N/A')
+                        
                         # Log every 5 cycles to avoid spam
                         if self.cycle_count % 5 == 0:
-                            self.logger.info(f"📊 {symbol} Analysis: Fast MA=${fast_ma:.2f}, Slow MA=${slow_ma:.2f}, RSI={rsi}, Position={position}")
+                            self.logger.info(f"📊 {symbol} Technical Analysis:")
+                            self.logger.info(f"   Price: ${latest_price:.2f}, Position: {position}")
+                            self.logger.info(f"   Moving Averages: Fast=${fast_ma:.2f}, Slow=${slow_ma:.2f}")
+                            self.logger.info(f"   RSI: {rsi}")
+                            self.logger.info(f"   Volume: OBV={obv}, OBV Trend={obv_trend}, MFI={mfi}")
+                            self.logger.info(f"   MACD: {macd:.3f} / Signal={macd_signal:.3f} ({macd_bullish})")
+                            self.logger.info(f"   Bollinger Bands: ${bb_lower:.2f} - ${bb_upper:.2f}")
                             
                             # Check if we're close to a crossover
                             ma_diff = fast_ma - slow_ma
