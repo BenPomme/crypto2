@@ -72,8 +72,10 @@ class AlpacaDataProvider(MarketDataProvider):
         self.crypto_symbols = {
             'BTC/USD', 'ETH/USD', 'LTC/USD', 'BCH/USD', 'DOGE/USD',
             'ADA/USD', 'DOT/USD', 'UNI/USD', 'LINK/USD', 'AAVE/USD',
+            'SOL/USD', 'AVAX/USD',  # Added missing 4 Crypto Pairs Strategy symbols
             'BTCUSD', 'ETHUSD', 'LTCUSD', 'BCHUSD', 'DOGEUSD',
-            'ADAUSD', 'DOTUSD', 'UNIUSD', 'LINKUSD', 'AAVEUSD'
+            'ADAUSD', 'DOTUSD', 'UNIUSD', 'LINKUSD', 'AAVEUSD',
+            'SOLUSD', 'AVAXUSD'  # Added missing 4 Crypto Pairs Strategy symbols (no slash format)
         }
         
         logger.info("Alpaca data provider initialized")
@@ -191,7 +193,7 @@ class AlpacaDataProvider(MarketDataProvider):
         
         return (normalized in self.crypto_symbols or 
                 with_slash in self.crypto_symbols or
-                any(crypto in symbol.upper() for crypto in ['BTC', 'ETH', 'LTC', 'BCH', 'DOGE', 'ADA', 'DOT', 'UNI', 'LINK', 'AAVE']))
+                any(crypto in symbol.upper() for crypto in ['BTC', 'ETH', 'LTC', 'BCH', 'DOGE', 'ADA', 'DOT', 'UNI', 'LINK', 'AAVE', 'SOL', 'AVAX']))
     
     def is_us_market_open(self, include_extended_hours: bool = True) -> bool:
         """
