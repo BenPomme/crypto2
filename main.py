@@ -85,9 +85,6 @@ class CryptoTradingBot:
                 self.data_buffers[symbol] = DataBuffer(max_size=buffer_size)
                 self.logger.info(f"Created data buffer for {symbol}")
             
-            # Parameter manager for ML-optimizable parameters
-            self.parameter_manager = ParameterManager()
-            
             # Feature engineer
             feature_config = {
                 'ma_fast': self.settings.trading.fast_ma_period,
@@ -96,17 +93,7 @@ class CryptoTradingBot:
             }
             self.feature_engineer = FeatureEngineer(feature_config)
             
-            strategy_config = {
-                'volume_confirmation': True,
-                'stop_loss_pct': 0.02,  # Match executor config
-                'take_profit_pct': 0.06,  # Match executor config
-                'min_periods': 20,  # Faster signal generation
-                'min_confidence': 0.3,  # Lower threshold for smaller moves
-                'rsi_oversold': 35.0,  # Less extreme RSI levels
-                'rsi_overbought': 65.0,  # Less extreme RSI levels
-                'volume_threshold': 1.1,  # Only 10% above average (easier to meet)
-            }
-            self.strategy = MACrossoverStrategy(strategy_config, self.parameter_manager)
+            # Strategy will be initialized after parameter manager
             
             # Risk manager - Multi-symbol risk settings (4 crypto pairs)
             risk_config = {
@@ -137,6 +124,22 @@ class CryptoTradingBot:
                 initial_capital = self.config.get('initial_capital', 10000.0)
             
             self.performance_tracker = PerformanceTracker(initial_capital)
+            
+            # Parameter manager for ML-optimizable parameters (after Firebase initialization)
+            self.parameter_manager = ParameterManager(firebase_logger=self.performance_tracker.firebase_logger)
+            
+            # Strategy initialization (after parameter manager)
+            strategy_config = {
+                'volume_confirmation': True,
+                'stop_loss_pct': 0.02,  # Match executor config
+                'take_profit_pct': 0.06,  # Match executor config
+                'min_periods': 20,  # Faster signal generation
+                'min_confidence': 0.3,  # Lower threshold for smaller moves
+                'rsi_oversold': 35.0,  # Less extreme RSI levels
+                'rsi_overbought': 65.0,  # Less extreme RSI levels
+                'volume_threshold': 1.1,  # Only 10% above average (easier to meet)
+            }
+            self.strategy = MACrossoverStrategy(strategy_config, self.parameter_manager)
             
             self.logger.info("All components initialized successfully")
             

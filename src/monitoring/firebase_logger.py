@@ -99,9 +99,9 @@ class FirebaseLogger:
             # Handle numpy types
             if isinstance(value, (np.bool_, bool)):
                 return bool(value)
-            elif isinstance(value, np.integer):
+            elif isinstance(value, (np.integer, np.int64)):
                 return int(value)
-            elif isinstance(value, np.floating):
+            elif isinstance(value, (np.floating, np.float64)):
                 return float(value)
             elif isinstance(value, np.ndarray):
                 return value.tolist()
@@ -200,12 +200,15 @@ class FirebaseLogger:
             if 'timestamp' not in performance_data:
                 performance_data['timestamp'] = datetime.now().isoformat()
             
+            # Clean data for Firestore compatibility
+            cleaned_data = self._clean_data_for_firestore(performance_data)
+            
             # Use date as document ID for daily performance
             date_str = datetime.now().strftime('%Y-%m-%d')
             
             # Update or create performance document
             doc_ref = self.db.collection('performance').document(date_str)
-            doc_ref.set(performance_data, merge=True)
+            doc_ref.set(cleaned_data, merge=True)
             
             logger.debug(f"Performance logged to Firebase: {date_str}")
             
@@ -234,8 +237,11 @@ class FirebaseLogger:
             if 'timestamp' not in error_data:
                 error_data['timestamp'] = datetime.now().isoformat()
             
+            # Clean data for Firestore compatibility
+            cleaned_data = self._clean_data_for_firestore(error_data)
+            
             # Add to errors collection
-            doc_ref = self.db.collection('errors').add(error_data)
+            doc_ref = self.db.collection('errors').add(cleaned_data)
             logger.debug(f"Error logged to Firebase: {doc_ref[1].id}")
             
             return True
@@ -262,9 +268,12 @@ class FirebaseLogger:
             # Add timestamp
             status_data['last_updated'] = datetime.now().isoformat()
             
+            # Clean data for Firestore compatibility
+            cleaned_data = self._clean_data_for_firestore(status_data)
+            
             # Update system_status document
             doc_ref = self.db.collection('system').document('status')
-            doc_ref.set(status_data, merge=True)
+            doc_ref.set(cleaned_data, merge=True)
             
             logger.debug("System status updated in Firebase")
             
