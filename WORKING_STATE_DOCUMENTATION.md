@@ -114,9 +114,12 @@ def generate_signal(self, data: pd.DataFrame, symbol: str = None) -> Optional[Tr
 ## ✅ RECENT FIXES (2025-06-05)
 
 ### 1. Risk Manager Over-Rejection (FIXED) ✅
-**Location**: `src/risk/risk_manager.py`
-**Fix**: Improved cash availability detection for paper trading and better error reporting
-**Status**: Risk manager now uses portfolio_value as cash when cash=0, fixed misleading "0 violations" message
+**Location**: `src/risk/risk_manager.py`, `src/risk/position_sizer.py`
+**Fix**: Fixed cash vs buying power usage for crypto position sizing
+**Status**: 
+- Risk manager now uses portfolio_value as cash when cash=0 for paper trading
+- Position sizing uses full buying power (~$50k) instead of just cash ($25k)
+- Trade approval checks against buying_power for crypto trades
 
 ### 2. Symbol Classification (FIXED) ✅  
 **Location**: `src/data/market_data.py`
