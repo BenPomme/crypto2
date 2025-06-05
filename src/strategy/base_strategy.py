@@ -140,7 +140,13 @@ class BaseStrategy(ABC):
         Returns:
             Minimum periods needed
         """
-        return self.config.get('min_periods', 50)
+        # Use a more flexible minimum - at least the slow MA period + buffer
+        slow_ma_period = self.config.get('slow_ma_period', 24)
+        buffer = 10  # Extra buffer for indicator calculations
+        configured_min = self.config.get('min_periods', slow_ma_period + buffer)
+        
+        # Ensure we have at least the slow MA period + buffer
+        return max(configured_min, slow_ma_period + buffer)
     
     def update_position(self, signal: TradingSignal) -> None:
         """

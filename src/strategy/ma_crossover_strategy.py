@@ -42,6 +42,10 @@ class MACrossoverStrategy(BaseStrategy):
         if config:
             default_config.update(config)
         
+        # Set slow MA period for base class minimum periods calculation
+        if 'slow_ma_period' not in default_config:
+            default_config['slow_ma_period'] = 24  # Default slow MA period
+        
         super().__init__("MA_Crossover", default_config)
         
         # Use parameter manager for dynamic parameters

@@ -138,9 +138,23 @@ class AlpacaDataProvider(MarketDataProvider):
                 logger.warning(f"No data returned for {symbol}")
                 return pd.DataFrame()
             
+            initial_count = len(df)
+            logger.debug(f"Received {initial_count} bars before filtering for {symbol}")
+            
             # Filter for specific exchange if needed (Coinbase Pro)
+            # Only filter if we have exchange column and CBSE data is available
             if 'exchange' in df.columns:
-                df = df[df.exchange == 'CBSE'].copy()
+                available_exchanges = df['exchange'].unique()
+                logger.debug(f"Available exchanges for {symbol}: {list(available_exchanges)}")
+                
+                # Prefer CBSE but fall back to all data if CBSE is insufficient
+                cbse_data = df[df.exchange == 'CBSE'].copy()
+                if len(cbse_data) >= max(20, periods * 0.5):  # At least 20 bars or 50% of requested
+                    df = cbse_data
+                    logger.debug(f"Using CBSE exchange data: {len(df)} bars")
+                else:
+                    logger.info(f"CBSE has insufficient data ({len(cbse_data)} bars), using all exchanges")
+                    # Keep all exchange data for better coverage
             
             # Ensure we have the required columns
             required_columns = ['open', 'high', 'low', 'close', 'volume']
@@ -151,7 +165,14 @@ class AlpacaDataProvider(MarketDataProvider):
             # Reset index to make timestamp a column
             df = df.reset_index()
             
-            logger.info(f"Successfully fetched {len(df)} bars for {symbol}")
+            # Log data quality metrics
+            final_count = len(df)
+            coverage_pct = (final_count / periods) * 100 if periods > 0 else 0
+            logger.info(f"Successfully fetched {final_count}/{periods} bars for {symbol} ({coverage_pct:.1f}% coverage)")
+            
+            if final_count < periods * 0.8:  # Less than 80% coverage
+                logger.warning(f"Low data coverage for {symbol}: {final_count}/{periods} bars ({coverage_pct:.1f}%)")
+            
             return df
             
         except Exception as e:
