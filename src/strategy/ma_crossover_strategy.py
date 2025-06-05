@@ -74,7 +74,13 @@ class MACrossoverStrategy(BaseStrategy):
         ]
         
         if self.config['volume_confirmation']:
-            indicators.extend(['volume', 'volume_ma'])
+            indicators.extend(['volume', 'volume_ma', 'volume_ratio', 'obv', 'obv_trend', 'mfi'])
+        
+        # Add Bollinger Bands for volatility analysis
+        indicators.extend(['bb_upper', 'bb_lower', 'bb_middle'])
+        
+        # Add MACD for trend confirmation
+        indicators.extend(['macd', 'macd_signal', 'macd_histogram', 'macd_bullish', 'macd_momentum'])
         
         return indicators
     
@@ -225,16 +231,108 @@ class MACrossoverStrategy(BaseStrategy):
                     confidence += 0.1
                     reasons.append(f"RSI neutral ({rsi:.1f})")
         
-        # Volume confirmation filter
+        # Enhanced volume confirmation filter with OBV and MFI
         if self.config['volume_confirmation']:
+            volume_score = 0
+            volume_reasons = []
+            
+            # Volume ratio confirmation
             if 'volume_ratio' in latest:
                 volume_ratio = latest['volume_ratio']
-                if not pd.isna(volume_ratio) and volume_ratio >= self.config['volume_threshold']:
+                if not pd.isna(volume_ratio):
+                    if volume_ratio >= self.config.get('volume_threshold', 1.2):
+                        volume_score += 0.15
+                        volume_reasons.append(f"High volume ({volume_ratio:.1f}x avg)")
+                    elif volume_ratio < 0.5:
+                        volume_score -= 0.2
+                        volume_reasons.append(f"Low volume ({volume_ratio:.1f}x avg)")
+            
+            # OBV trend confirmation
+            if 'obv_trend' in latest and 'obv' in data.columns and len(data) > 1:
+                obv_trend = latest['obv_trend']
+                if not pd.isna(obv_trend) and obv_trend == 1:  # OBV trending up
+                    volume_score += 0.1
+                    volume_reasons.append("OBV uptrend")
+                elif not pd.isna(obv_trend) and obv_trend == 0:  # OBV trending down
+                    volume_score -= 0.1
+                    volume_reasons.append("OBV downtrend")
+            
+            # MFI confirmation (Money Flow Index)
+            if 'mfi' in latest:
+                mfi = latest['mfi']
+                if not pd.isna(mfi):
+                    if mfi > 50 and mfi < 80:  # Positive money flow, not overbought
+                        volume_score += 0.1
+                        volume_reasons.append(f"Positive money flow (MFI={mfi:.1f})")
+                    elif mfi < 20:  # Oversold on money flow
+                        volume_score += 0.15
+                        volume_reasons.append(f"MFI oversold ({mfi:.1f})")
+                    elif mfi > 80:  # Overbought on money flow
+                        volume_score -= 0.15
+                        volume_reasons.append(f"MFI overbought ({mfi:.1f})")
+            
+            confidence += volume_score
+            if volume_reasons:
+                reasons.extend(volume_reasons)
+        
+        # Bollinger Bands volatility filter
+        if all(col in latest for col in ['bb_upper', 'bb_lower', 'bb_middle']):
+            bb_upper = latest['bb_upper']
+            bb_lower = latest['bb_lower']
+            bb_middle = latest['bb_middle']
+            
+            if not any(pd.isna([bb_upper, bb_lower, bb_middle])):
+                # Calculate position within Bollinger Bands
+                bb_position = (current_price - bb_lower) / (bb_upper - bb_lower)
+                bb_width_pct = ((bb_upper - bb_lower) / bb_middle) * 100
+                
+                # Bollinger Band squeeze detection (low volatility -> potential breakout)
+                if bb_width_pct < 4:  # Tight bands indicate low volatility
+                    confidence += 0.05
+                    reasons.append(f"BB squeeze ({bb_width_pct:.1f}% width)")
+                
+                # Support from lower band
+                if bb_position < 0.2:  # Near lower band
                     confidence += 0.15
-                    reasons.append(f"High volume ({volume_ratio:.1f}x avg)")
-                elif not pd.isna(volume_ratio) and volume_ratio < 0.5:
-                    confidence -= 0.2
-                    reasons.append(f"Low volume ({volume_ratio:.1f}x avg)")
+                    reasons.append(f"Near BB lower band (oversold)")
+                elif bb_position > 0.8:  # Near upper band
+                    confidence -= 0.1
+                    reasons.append(f"Near BB upper band")
+                elif 0.4 <= bb_position <= 0.6:  # Near middle
+                    confidence += 0.05
+                    reasons.append(f"BB middle support")
+        
+        # MACD trend confirmation
+        if all(col in latest for col in ['macd', 'macd_signal', 'macd_histogram', 'macd_bullish']):
+            macd = latest['macd']
+            macd_signal = latest['macd_signal']
+            macd_histogram = latest['macd_histogram']
+            macd_bullish = latest['macd_bullish']
+            
+            if not any(pd.isna([macd, macd_signal, macd_histogram])):
+                # MACD bullish crossover (MACD above signal line)
+                if macd_bullish == 1:
+                    confidence += 0.15
+                    reasons.append("MACD bullish")
+                    
+                    # Extra boost if MACD is accelerating upward
+                    if 'macd_momentum' in latest and not pd.isna(latest['macd_momentum']):
+                        if latest['macd_momentum'] > 0:
+                            confidence += 0.05
+                            reasons.append("MACD accelerating")
+                else:
+                    confidence -= 0.1
+                    reasons.append("MACD bearish")
+                
+                # MACD zero line confirmation
+                if macd > 0:
+                    confidence += 0.05
+                    reasons.append("MACD above zero")
+                
+                # MACD histogram growing (momentum building)
+                if macd_histogram > 0:
+                    confidence += 0.05
+                    reasons.append("MACD histogram positive")
         
         # Trend strength filter
         if 'trend_strength' in latest:
@@ -321,16 +419,65 @@ class MACrossoverStrategy(BaseStrategy):
                     confidence += 0.1
                     reasons.append(f"RSI healthy ({rsi:.1f})")
         
-        # Volume confirmation (same as regular signal)
+        # Enhanced volume confirmation for trend continuation
         if self.config['volume_confirmation']:
+            volume_score = 0
+            volume_reasons = []
+            
+            # Volume ratio confirmation (less strict for trend continuation)
             if 'volume_ratio' in latest:
                 volume_ratio = latest['volume_ratio']
-                if not pd.isna(volume_ratio) and volume_ratio >= self.config['volume_threshold']:
-                    confidence += 0.15
-                    reasons.append(f"High volume ({volume_ratio:.1f}x avg)")
-                elif not pd.isna(volume_ratio) and volume_ratio < 0.5:
-                    confidence -= 0.1  # Less penalty for trend continuation
-                    reasons.append(f"Low volume ({volume_ratio:.1f}x avg)")
+                if not pd.isna(volume_ratio):
+                    if volume_ratio >= self.config.get('volume_threshold', 1.2):
+                        volume_score += 0.1  # Slightly less boost for continuation
+                        volume_reasons.append(f"High volume ({volume_ratio:.1f}x avg)")
+                    elif volume_ratio < 0.3:  # Only penalize very low volume
+                        volume_score -= 0.05
+                        volume_reasons.append(f"Very low volume ({volume_ratio:.1f}x avg)")
+            
+            # OBV trend confirmation (important for trend continuation)
+            if 'obv_trend' in latest and 'obv' in data.columns and len(data) > 1:
+                obv_trend = latest['obv_trend']
+                if not pd.isna(obv_trend) and obv_trend == 1:  # OBV trending up
+                    volume_score += 0.15  # Higher weight for trend continuation
+                    volume_reasons.append("OBV supports trend")
+                elif not pd.isna(obv_trend) and obv_trend == 0:  # OBV trending down
+                    volume_score -= 0.2  # Significant penalty if volume doesn't support trend
+                    volume_reasons.append("OBV divergence")
+            
+            # MFI confirmation (more lenient for trend continuation)
+            if 'mfi' in latest:
+                mfi = latest['mfi']
+                if not pd.isna(mfi):
+                    if mfi > 40 and mfi < 85:  # Broader range for trend continuation
+                        volume_score += 0.05
+                        volume_reasons.append(f"MFI supportive ({mfi:.1f})")
+                    elif mfi > 85:  # Very overbought
+                        volume_score -= 0.1
+                        volume_reasons.append(f"MFI extremely overbought ({mfi:.1f})")
+            
+            confidence += volume_score
+            if volume_reasons:
+                reasons.extend(volume_reasons)
+        
+        # MACD trend confirmation for continuation (more lenient)
+        if all(col in latest for col in ['macd', 'macd_signal', 'macd_bullish']):
+            macd = latest['macd']
+            macd_bullish = latest['macd_bullish']
+            
+            if not pd.isna(macd) and not pd.isna(macd_bullish):
+                # MACD still bullish supports trend continuation
+                if macd_bullish == 1:
+                    confidence += 0.1
+                    reasons.append("MACD supports trend")
+                else:
+                    confidence -= 0.15  # Stronger penalty for trend continuation
+                    reasons.append("MACD bearish (trend weakening)")
+                
+                # MACD above zero line still supportive
+                if macd > 0:
+                    confidence += 0.05
+                    reasons.append("MACD above zero")
         
         # Check if signal meets minimum confidence threshold
         min_confidence = self.config.get('min_confidence', 0.5)
@@ -413,6 +560,75 @@ class MACrossoverStrategy(BaseStrategy):
                     'entry_price': entry_price
                 }
             )
+        
+        # Bollinger Bands exit conditions
+        if all(col in latest for col in ['bb_upper', 'bb_lower', 'bb_middle']):
+            bb_upper = latest['bb_upper']
+            bb_lower = latest['bb_lower']
+            bb_middle = latest['bb_middle']
+            
+            if not any(pd.isna([bb_upper, bb_lower, bb_middle])):
+                bb_position = (current_price - bb_lower) / (bb_upper - bb_lower)
+                
+                # Exit if price hits upper Bollinger Band (potential reversal)
+                if self.is_long(symbol) and bb_position > 0.95:
+                    return TradingSignal(
+                        signal_type=SignalType.CLOSE_LONG,
+                        symbol=symbol,
+                        timestamp=timestamp,
+                        price=current_price,
+                        confidence=0.7,
+                        reason=f"BB upper band exit (overbought)",
+                        metadata={
+                            'exit_type': 'bb_upper_exit',
+                            'bb_position': bb_position,
+                            'pnl_pct': pnl_pct,
+                            'entry_price': entry_price
+                        }
+                    )
+                
+                # Exit if price breaks below middle BB after being above (trend weakening)
+                if (self.is_long(symbol) and current_price < bb_middle and 
+                    pnl_pct < -2):  # Only if losing money
+                    return TradingSignal(
+                        signal_type=SignalType.CLOSE_LONG,
+                        symbol=symbol,
+                        timestamp=timestamp,
+                        price=current_price,
+                        confidence=0.6,
+                        reason=f"BB middle break with loss ({pnl_pct:.2f}%)",
+                        metadata={
+                            'exit_type': 'bb_middle_break',
+                            'bb_position': bb_position,
+                            'pnl_pct': pnl_pct,
+                            'entry_price': entry_price
+                        }
+                    )
+        
+        # MACD exit conditions
+        if all(col in latest and col in data.columns for col in ['macd_bullish', 'macd', 'macd_signal']):
+            if len(data) > 1:
+                current_macd_bullish = latest['macd_bullish']
+                previous_macd_bullish = data.iloc[-2]['macd_bullish'] if 'macd_bullish' in data.iloc[-2] else current_macd_bullish
+                
+                # MACD bearish crossover (trend change)
+                if (self.is_long(symbol) and 
+                    previous_macd_bullish == 1 and current_macd_bullish == 0):
+                    return TradingSignal(
+                        signal_type=SignalType.CLOSE_LONG,
+                        symbol=symbol,
+                        timestamp=timestamp,
+                        price=current_price,
+                        confidence=0.8,
+                        reason="MACD bearish crossover",
+                        metadata={
+                            'exit_type': 'macd_bearish_cross',
+                            'macd': latest['macd'],
+                            'macd_signal': latest['macd_signal'],
+                            'pnl_pct': pnl_pct,
+                            'entry_price': entry_price
+                        }
+                    )
         
         return None
     

@@ -305,14 +305,79 @@ class TechnicalIndicators:
             except Exception as e:
                 logger.warning(f"Skipping Bollinger Bands: {e}")
             
-            # Add basic volume analysis
+            # Enhanced volume analysis with OBV and MFI
             try:
                 result_df['volume_ma'] = df['volume'].rolling(window=20, min_periods=1).mean()
                 result_df['volume_ratio'] = df['volume'] / (result_df['volume_ma'] + 1e-10)
+                
+                # On-Balance Volume (OBV) - Custom implementation for reliability
+                obv = pd.Series(0.0, index=df.index)
+                if len(df) > 1:
+                    obv.iloc[0] = df['volume'].iloc[0]
+                    for i in range(1, len(df)):
+                        if df['close'].iloc[i] > df['close'].iloc[i-1]:
+                            obv.iloc[i] = obv.iloc[i-1] + df['volume'].iloc[i]
+                        elif df['close'].iloc[i] < df['close'].iloc[i-1]:
+                            obv.iloc[i] = obv.iloc[i-1] - df['volume'].iloc[i]
+                        else:
+                            obv.iloc[i] = obv.iloc[i-1]
+                result_df['obv'] = obv
+                
+                # OBV trend (rising/falling)
+                result_df['obv_ma'] = result_df['obv'].rolling(window=10, min_periods=1).mean()
+                result_df['obv_trend'] = (result_df['obv'] > result_df['obv_ma']).astype(int)
+                
+                # Money Flow Index (MFI) - Simplified implementation
+                typical_price = (df['high'] + df['low'] + df['close']) / 3
+                money_flow = typical_price * df['volume']
+                
+                positive_flow = pd.Series(0.0, index=df.index)
+                negative_flow = pd.Series(0.0, index=df.index)
+                
+                for i in range(1, len(typical_price)):
+                    if typical_price.iloc[i] > typical_price.iloc[i-1]:
+                        positive_flow.iloc[i] = money_flow.iloc[i]
+                    elif typical_price.iloc[i] < typical_price.iloc[i-1]:
+                        negative_flow.iloc[i] = money_flow.iloc[i]
+                
+                # Calculate MFI
+                pos_mf = positive_flow.rolling(window=default_config['mfi_period'], min_periods=1).sum()
+                neg_mf = negative_flow.rolling(window=default_config['mfi_period'], min_periods=1).sum()
+                mfi_ratio = pos_mf / (neg_mf + 1e-10)
+                result_df['mfi'] = 100 - (100 / (1 + mfi_ratio))
+                result_df['mfi'] = result_df['mfi'].fillna(50.0)
+                
+                logger.debug(f"Volume indicators added: OBV={result_df['obv'].iloc[-1]:.0f}, MFI={result_df['mfi'].iloc[-1]:.1f}")
+                
             except Exception as e:
                 logger.warning(f"Skipping volume analysis: {e}")
                 result_df['volume_ma'] = df['volume']
                 result_df['volume_ratio'] = pd.Series(1.0, index=df.index)
+                result_df['obv'] = pd.Series(0.0, index=df.index)
+                result_df['obv_trend'] = pd.Series(0, index=df.index)
+                result_df['mfi'] = pd.Series(50.0, index=df.index)
+            
+            # MACD calculation using pure pandas
+            try:
+                fast_ema = df['close'].ewm(span=12).mean()
+                slow_ema = df['close'].ewm(span=26).mean()
+                result_df['macd'] = fast_ema - slow_ema
+                result_df['macd_signal'] = result_df['macd'].ewm(span=9).mean()
+                result_df['macd_histogram'] = result_df['macd'] - result_df['macd_signal']
+                
+                # MACD trend and momentum
+                result_df['macd_bullish'] = (result_df['macd'] > result_df['macd_signal']).astype(int)
+                result_df['macd_momentum'] = result_df['macd_histogram'].diff()
+                
+                logger.debug(f"MACD indicators added: MACD={result_df['macd'].iloc[-1]:.3f}, Signal={result_df['macd_signal'].iloc[-1]:.3f}")
+                
+            except Exception as e:
+                logger.warning(f"Skipping MACD: {e}")
+                result_df['macd'] = pd.Series(0.0, index=df.index)
+                result_df['macd_signal'] = pd.Series(0.0, index=df.index)
+                result_df['macd_histogram'] = pd.Series(0.0, index=df.index)
+                result_df['macd_bullish'] = pd.Series(0, index=df.index)
+                result_df['macd_momentum'] = pd.Series(0.0, index=df.index)
             
             # Simple trend strength calculation
             try:
