@@ -218,11 +218,14 @@ class RiskManager:
                 if hasattr(signal, 'metadata') and signal.metadata:
                     stop_loss_price = signal.metadata.get('stop_loss_price')
                 
+                # For crypto trading, pass the actual available cash instead of buying_power
+                effective_buying_power = cash_available if is_crypto else buying_power
+                
                 position_size = self.position_sizer.calculate_position_size(
                     account_value=account_value,
                     entry_price=signal.price,
                     volatility=volatility,
-                    buying_power=buying_power,
+                    buying_power=effective_buying_power,
                     is_crypto=is_crypto,
                     is_pattern_day_trader=is_pattern_day_trader,
                     stop_loss_price=stop_loss_price

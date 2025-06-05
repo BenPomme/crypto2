@@ -402,8 +402,9 @@ class PositionSizer:
         Returns:
             PositionSizeResult with optimized size
         """
-        # Use buying power if available, otherwise fall back to account value
-        available_capital = buying_power if buying_power else account_value
+        # For crypto trading, actual available cash is the limiting factor
+        # Use the smaller of buying power or account value (for paper trading)
+        theoretical_capital = buying_power if buying_power else account_value
         
         # Calculate risk-based position size
         risk_per_trade = self.config['risk_per_trade']
@@ -416,7 +417,7 @@ class PositionSizer:
                 # Size position so maximum loss equals risk_amount
                 max_position_value = risk_amount / price_risk
             else:
-                max_position_value = available_capital * 0.1  # Fallback to 10%
+                max_position_value = theoretical_capital * 0.1  # Fallback to 10%
         else:
             # No stop loss defined, use default 4% price risk assumption
             default_price_risk = 0.04
@@ -424,11 +425,18 @@ class PositionSizer:
         
         # Crypto-only position limits (no margin available for crypto)
         max_crypto_position = account_value * self.config['crypto_max_position']
-        position_value = min(max_position_value, max_crypto_position)
+        
+        # CRITICAL: For crypto, must check actual available cash
+        # This prevents trying to use more cash than we actually have
+        max_cash_position = theoretical_capital * 0.95  # Use 95% of available cash, keep 5% buffer
+        
+        # Use the most restrictive limit
+        position_value = min(max_position_value, max_crypto_position, max_cash_position)
         leverage_used = 1.0  # No leverage available for crypto
         
         logger.info(f"Crypto position sizing: max_risk_based=${max_position_value:.0f}, "
-                   f"max_crypto_limit=${max_crypto_position:.0f}")
+                   f"max_crypto_limit=${max_crypto_position:.0f}, "
+                   f"max_cash_available=${max_cash_position:.0f}")
         
         # Apply minimum position size
         min_position = self.config['min_position_size']
