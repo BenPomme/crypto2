@@ -276,15 +276,15 @@ class TechnicalIndicators:
             
             # Use pure pandas calculations to avoid pandas-ta issues
             logger.info(f"Using MA periods: fast={default_config['ma_fast']}, slow={default_config['ma_slow']}")
-            result_df['sma_fast'] = df['close'].rolling(window=default_config['ma_fast'], min_periods=1).mean()
-            result_df['sma_slow'] = df['close'].rolling(window=default_config['ma_slow'], min_periods=1).mean()
-            result_df['ema_fast'] = df['close'].ewm(span=default_config['ma_fast'], min_periods=1).mean()
-            result_df['ema_slow'] = df['close'].ewm(span=default_config['ma_slow'], min_periods=1).mean()
+            result_df['sma_fast'] = df['close'].rolling(window=default_config['ma_fast']).mean()
+            result_df['sma_slow'] = df['close'].rolling(window=default_config['ma_slow']).mean()
+            result_df['ema_fast'] = df['close'].ewm(span=default_config['ma_fast']).mean()
+            result_df['ema_slow'] = df['close'].ewm(span=default_config['ma_slow']).mean()
             
             # Simple RSI calculation using pandas
             delta = df['close'].diff()
-            gain = (delta.where(delta > 0, 0)).rolling(window=default_config['rsi_period'], min_periods=1).mean()
-            loss = (-delta.where(delta < 0, 0)).rolling(window=default_config['rsi_period'], min_periods=1).mean()
+            gain = (delta.where(delta > 0, 0)).rolling(window=default_config['rsi_period']).mean()
+            loss = (-delta.where(delta < 0, 0)).rolling(window=default_config['rsi_period']).mean()
             rs = gain / (loss + 1e-10)  # Avoid division by zero
             result_df['rsi'] = 100 - (100 / (1 + rs))
             result_df['rsi'] = result_df['rsi'].fillna(50.0)  # Fill NaN with neutral RSI
