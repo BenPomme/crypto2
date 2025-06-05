@@ -128,6 +128,25 @@ class MACrossoverStrategy(BaseStrategy):
                     self.log_signal(signal)
                     return signal
             
+            # Check for trend continuation signal (fast MA well above slow MA)
+            elif (current_fast_ma > current_slow_ma and 
+                  self.is_flat(trading_symbol) and 
+                  self.config.get('enable_trend_following', True)):
+                
+                # Only if the trend is strong and accelerating
+                ma_spread_pct = ((current_fast_ma - current_slow_ma) / current_slow_ma) * 100
+                prev_ma_spread_pct = ((prev_fast_ma - prev_slow_ma) / prev_slow_ma) * 100
+                
+                # Check if trend is accelerating and spread is meaningful
+                if (ma_spread_pct > 0.5 and  # At least 0.5% spread between MAs
+                    ma_spread_pct > prev_ma_spread_pct and  # Accelerating trend
+                    current_price > current_fast_ma):  # Price above fast MA
+                    
+                    signal = self._evaluate_trend_continuation_signal(latest, data, trading_symbol)
+                    if signal:
+                        self.log_signal(signal)
+                        return signal
+            
             # Check for sell signal (death cross) - only if we have a position to close
             elif death_cross and self.is_long(trading_symbol) and self.config['exit_on_reverse_cross']:
                 signal = TradingSignal(
@@ -250,6 +269,92 @@ class MACrossoverStrategy(BaseStrategy):
                 'rsi': latest.get('rsi'),
                 'volume_ratio': latest.get('volume_ratio'),
                 'crossover_type': 'golden_cross'
+            }
+        )
+    
+    def _evaluate_trend_continuation_signal(self, latest: pd.Series, data: pd.DataFrame, symbol: str) -> Optional[TradingSignal]:
+        """
+        Evaluate trend continuation signal for ongoing uptrends
+        
+        Args:
+            latest: Latest data point
+            data: Full data DataFrame
+            symbol: Trading symbol
+            
+        Returns:
+            TradingSignal or None
+        """
+        current_price = latest['close']
+        timestamp = latest.name if hasattr(latest, 'name') else datetime.now()
+        
+        # Lower base confidence for trend continuation vs fresh crossover
+        confidence = 0.4
+        reasons = ["Trend continuation signal"]
+        
+        # Calculate MA spread strength
+        fast_ma = latest[f'{self.ma_type}_fast']
+        slow_ma = latest[f'{self.ma_type}_slow']
+        ma_spread_pct = ((fast_ma - slow_ma) / slow_ma) * 100
+        
+        if ma_spread_pct > 1.0:  # Strong trend
+            confidence += 0.1
+            reasons.append(f"Strong MA spread ({ma_spread_pct:.1f}%)")
+        
+        # Price momentum check
+        if current_price > fast_ma:
+            price_above_fast_pct = ((current_price - fast_ma) / fast_ma) * 100
+            if price_above_fast_pct > 0.5:
+                confidence += 0.1
+                reasons.append(f"Price above fast MA ({price_above_fast_pct:.1f}%)")
+        
+        # RSI confirmation (less strict for trend continuation)
+        if 'rsi' in latest:
+            rsi = latest['rsi']
+            if not pd.isna(rsi):
+                if rsi < self.config['rsi_oversold']:
+                    confidence += 0.2
+                    reasons.append(f"RSI oversold ({rsi:.1f})")
+                elif rsi > self.config['rsi_overbought']:
+                    confidence -= 0.1  # Less penalty for trend continuation
+                    reasons.append(f"RSI overbought ({rsi:.1f})")
+                elif 40 <= rsi <= 70:
+                    confidence += 0.1
+                    reasons.append(f"RSI healthy ({rsi:.1f})")
+        
+        # Volume confirmation (same as regular signal)
+        if self.config['volume_confirmation']:
+            if 'volume_ratio' in latest:
+                volume_ratio = latest['volume_ratio']
+                if not pd.isna(volume_ratio) and volume_ratio >= self.config['volume_threshold']:
+                    confidence += 0.15
+                    reasons.append(f"High volume ({volume_ratio:.1f}x avg)")
+                elif not pd.isna(volume_ratio) and volume_ratio < 0.5:
+                    confidence -= 0.1  # Less penalty for trend continuation
+                    reasons.append(f"Low volume ({volume_ratio:.1f}x avg)")
+        
+        # Check if signal meets minimum confidence threshold
+        min_confidence = self.config.get('min_confidence', 0.5)
+        if confidence < min_confidence:
+            logger.debug(f"Trend continuation confidence {confidence:.2f} below threshold {min_confidence}")
+            return None
+        
+        # Ensure confidence doesn't exceed 1.0
+        confidence = min(confidence, 1.0)
+        
+        return TradingSignal(
+            signal_type=SignalType.BUY,
+            symbol=symbol,
+            timestamp=timestamp,
+            price=current_price,
+            confidence=confidence,
+            reason="; ".join(reasons),
+            metadata={
+                'fast_ma': fast_ma,
+                'slow_ma': slow_ma,
+                'ma_spread_pct': ma_spread_pct,
+                'rsi': latest.get('rsi'),
+                'volume_ratio': latest.get('volume_ratio'),
+                'signal_type': 'trend_continuation'
             }
         )
     
