@@ -94,20 +94,27 @@ class FirebaseLogger:
     def _clean_data_for_firestore(self, data: Dict[str, Any]) -> Dict[str, Any]:
         """Clean data to be compatible with Firestore"""
         import numpy as np
+        
+        def clean_value(value):
+            # Handle numpy types
+            if isinstance(value, (np.bool_, bool)):
+                return bool(value)
+            elif isinstance(value, np.integer):
+                return int(value)
+            elif isinstance(value, np.floating):
+                return float(value)
+            elif isinstance(value, np.ndarray):
+                return value.tolist()
+            elif isinstance(value, dict):
+                return {k: clean_value(v) for k, v in value.items()}
+            elif isinstance(value, list):
+                return [clean_value(item) for item in value]
+            else:
+                return value
+        
         cleaned = {}
         for key, value in data.items():
-            if isinstance(value, np.bool_):
-                cleaned[key] = bool(value)
-            elif isinstance(value, np.integer):
-                cleaned[key] = int(value)
-            elif isinstance(value, np.floating):
-                cleaned[key] = float(value)
-            elif isinstance(value, np.ndarray):
-                cleaned[key] = value.tolist()
-            elif isinstance(value, dict):
-                cleaned[key] = self._clean_data_for_firestore(value)
-            else:
-                cleaned[key] = value
+            cleaned[key] = clean_value(value)
         return cleaned
     
     def log_trade(self, trade_data: Dict[str, Any]) -> bool:
