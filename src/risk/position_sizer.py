@@ -402,9 +402,8 @@ class PositionSizer:
         Returns:
             PositionSizeResult with optimized size
         """
-        # For crypto trading, actual available cash is the limiting factor
-        # Use the smaller of buying power or account value (for paper trading)
-        theoretical_capital = buying_power if buying_power else account_value
+        # Use buying power for position sizing (includes leverage for crypto)
+        available_capital = buying_power if buying_power else account_value
         
         # Calculate risk-based position size
         risk_per_trade = self.config['risk_per_trade']
@@ -417,26 +416,27 @@ class PositionSizer:
                 # Size position so maximum loss equals risk_amount
                 max_position_value = risk_amount / price_risk
             else:
-                max_position_value = theoretical_capital * 0.1  # Fallback to 10%
+                max_position_value = available_capital * 0.1  # Fallback to 10%
         else:
             # No stop loss defined, use default 4% price risk assumption
             default_price_risk = 0.04
             max_position_value = risk_amount / default_price_risk
         
-        # Crypto-only position limits (no margin available for crypto)
+        # Crypto position limits (can use leverage via buying power)
         max_crypto_position = account_value * self.config['crypto_max_position']
         
-        # CRITICAL: For crypto, must check actual available cash
-        # This prevents trying to use more cash than we actually have
-        max_cash_position = theoretical_capital * 0.95  # Use 95% of available cash, keep 5% buffer
+        # Use available buying power as the upper limit
+        max_capital_position = available_capital * 0.95  # Use 95% of buying power, keep 5% buffer
         
         # Use the most restrictive limit
-        position_value = min(max_position_value, max_crypto_position, max_cash_position)
-        leverage_used = 1.0  # No leverage available for crypto
+        position_value = min(max_position_value, max_crypto_position, max_capital_position)
+        
+        # Calculate effective leverage being used
+        leverage_used = position_value / account_value if account_value > 0 else 1.0
         
         logger.info(f"Crypto position sizing: max_risk_based=${max_position_value:.0f}, "
                    f"max_crypto_limit=${max_crypto_position:.0f}, "
-                   f"max_cash_available=${max_cash_position:.0f}")
+                   f"max_capital_available=${max_capital_position:.0f}")
         
         # Apply minimum position size
         min_position = self.config['min_position_size']

@@ -218,32 +218,31 @@ class RiskManager:
                 if hasattr(signal, 'metadata') and signal.metadata:
                     stop_loss_price = signal.metadata.get('stop_loss_price')
                 
-                # For crypto trading, pass the actual available cash instead of buying_power
-                effective_buying_power = cash_available if is_crypto else buying_power
-                
                 position_size = self.position_sizer.calculate_position_size(
                     account_value=account_value,
                     entry_price=signal.price,
                     volatility=volatility,
-                    buying_power=effective_buying_power,
+                    buying_power=buying_power,
                     is_crypto=is_crypto,
                     is_pattern_day_trader=is_pattern_day_trader,
                     stop_loss_price=stop_loss_price
                 )
                 
-                # Crypto position validation (cash only, no margin)
+                # Position validation - use buying_power for crypto (leverage available)
                 required_cash = position_size.size_usd
-                available_cash = cash_available
+                available_for_trade = buying_power if buying_power > cash_available else cash_available
                 
-                if required_cash > available_cash:
+                logger.info(f"Position size check: need=${required_cash:.2f}, cash=${cash_available:.2f}, buying_power=${buying_power:.2f}, using=${available_for_trade:.2f}")
+                
+                if required_cash > available_for_trade:
                     approved = False
                     checks.append(RiskCheck(
                         name="cash_availability_check",
                         passed=False,
                         risk_level=RiskLevel.CRITICAL,
-                        message=f"Insufficient cash for crypto trade: need ${required_cash:.2f}, have ${available_cash:.2f}",
+                        message=f"Insufficient funds for trade: need ${required_cash:.2f}, have ${available_for_trade:.2f} (cash=${cash_available:.2f}, buying_power=${buying_power:.2f})",
                         value=required_cash,
-                        limit=available_cash
+                        limit=available_for_trade
                     ))
                 
             except Exception as e:
