@@ -111,21 +111,24 @@ def generate_signal(self, data: pd.DataFrame, symbol: str = None) -> Optional[Tr
 - ✅ **Risk calculations**: 1.6% risk per trade
 - ✅ **Account integration**: Real portfolio values ($99,700.48)
 
-## 🚨 KNOWN ISSUES TO FIX
+## ✅ RECENT FIXES (2025-06-05)
 
-### 1. Risk Manager Over-Rejection
+### 1. Risk Manager Over-Rejection (FIXED) ✅
 **Location**: `src/risk/risk_manager.py`
-**Issue**: Rejecting signals with "0 risk violations"
-**Impact**: Preventing legitimate trades
+**Fix**: Improved cash availability detection for paper trading and better error reporting
+**Status**: Risk manager now uses portfolio_value as cash when cash=0, fixed misleading "0 violations" message
 
-### 2. Symbol Classification  
+### 2. Symbol Classification (FIXED) ✅  
 **Location**: `src/data/market_data.py`
-**Issue**: SOL/USD, AVAX/USD marked as "stock" not "crypto"
-**Impact**: Wrong market hours
+**Fix**: Added SOL/USD and AVAX/USD to crypto symbols list and pattern matching
+**Status**: All 4 Crypto Pairs Strategy symbols now properly classified as crypto with 24/7 market hours
 
-### 3. Historical Data Limitation
-**Issue**: Only 32-77 bars vs requested 100
-**Impact**: May affect initial MA calculations
+### 3. Historical Data Limitation (IMPROVED) ✅
+**Location**: `src/data/market_data.py`, `src/strategy/base_strategy.py`
+**Fix**: Intelligent exchange filtering fallback and flexible minimum periods
+**Status**: Better data coverage with fallback from CBSE to all exchanges when needed
+
+## 🚨 REMAINING ISSUES (If Any)
 
 ## 📋 SAFE MODIFICATION GUIDELINES
 
