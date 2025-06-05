@@ -248,7 +248,7 @@ class MACrossoverStrategy(BaseStrategy):
                         volume_reasons.append(f"Low volume ({volume_ratio:.1f}x avg)")
             
             # OBV trend confirmation
-            if 'obv_trend' in latest and 'obv' in data.columns and len(data) > 1:
+            if 'obv_trend' in latest and len(data) > 1:
                 obv_trend = latest['obv_trend']
                 if not pd.isna(obv_trend) and obv_trend == 1:  # OBV trending up
                     volume_score += 0.1
@@ -436,7 +436,7 @@ class MACrossoverStrategy(BaseStrategy):
                         volume_reasons.append(f"Very low volume ({volume_ratio:.1f}x avg)")
             
             # OBV trend confirmation (important for trend continuation)
-            if 'obv_trend' in latest and 'obv' in data.columns and len(data) > 1:
+            if 'obv_trend' in latest and len(data) > 1:
                 obv_trend = latest['obv_trend']
                 if not pd.isna(obv_trend) and obv_trend == 1:  # OBV trending up
                     volume_score += 0.15  # Higher weight for trend continuation
@@ -606,7 +606,7 @@ class MACrossoverStrategy(BaseStrategy):
                     )
         
         # MACD exit conditions
-        if all(col in latest and col in data.columns for col in ['macd_bullish', 'macd', 'macd_signal']):
+        if all(col in latest for col in ['macd_bullish', 'macd', 'macd_signal']):
             if len(data) > 1:
                 current_macd_bullish = latest['macd_bullish']
                 previous_macd_bullish = data.iloc[-2]['macd_bullish'] if 'macd_bullish' in data.iloc[-2] else current_macd_bullish
