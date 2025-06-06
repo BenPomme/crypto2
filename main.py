@@ -267,7 +267,12 @@ class CryptoTradingBot:
         try:
             # Cycle through all trading symbols
             for symbol in self.trading_symbols:
-                self._execute_symbol_cycle(symbol)
+                try:
+                    self._execute_symbol_cycle(symbol)
+                except Exception as e:
+                    # Log error but continue with other symbols
+                    self.logger.error(f"Error in trading cycle for {symbol}: {e}")
+                    continue
                 
         except Exception as e:
             self.logger.error(f"Error in trading cycle: {e}")
@@ -290,6 +295,12 @@ class CryptoTradingBot:
             # Step 1: Get latest market data (REAL OHLCV bar)
             self.logger.debug(f"Getting latest OHLCV bar for {symbol}")
             latest_bar = self.data_provider.get_latest_bar(symbol)
+            
+            # Skip this symbol if no data available
+            if latest_bar is None:
+                self.logger.warning(f"No data available for {symbol}, skipping trading cycle")
+                return
+                
             self.logger.debug(f"{symbol} latest bar: O=${latest_bar['open']:.2f}, H=${latest_bar['high']:.2f}, L=${latest_bar['low']:.2f}, C=${latest_bar['close']:.2f}, V={latest_bar['volume']:.0f}")
             
             # Add to symbol-specific buffer

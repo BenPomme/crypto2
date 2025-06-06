@@ -194,7 +194,8 @@ class AlpacaDataProvider(MarketDataProvider):
             historical_data = self.get_historical_data(symbol, timeframe="1Min", periods=2)
             
             if historical_data.empty:
-                raise ValueError(f"No data available for {symbol}")
+                logger.warning(f"No bar data available for {symbol} - data feed may be temporarily unavailable")
+                return None
             
             # Get the most recent bar
             latest_row = historical_data.iloc[-1]
@@ -217,7 +218,7 @@ class AlpacaDataProvider(MarketDataProvider):
             
         except Exception as e:
             logger.error(f"Failed to get latest bar for {symbol}: {e}")
-            raise
+            return None
     
     def get_latest_price(self, symbol: str) -> float:
         """Get latest price for symbol"""
