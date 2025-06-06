@@ -346,6 +346,7 @@ class CryptoTradingBot:
                         
                         # Log every 5 cycles to avoid spam
                         if self.cycle_count % 5 == 0:
+                            latest_price = latest['close']
                             self.logger.info(f"📊 {symbol} Technical Analysis:")
                             self.logger.info(f"   Price: ${latest_price:.2f}, Position: {position}")
                             self.logger.info(f"   Moving Averages: Fast=${fast_ma:.2f}, Slow=${slow_ma:.2f}")
@@ -364,7 +365,7 @@ class CryptoTradingBot:
             if signal:
                 # Record signal
                 self.performance_tracker.record_signal(signal.to_dict())
-                self.last_signal_time = current_time
+                self.last_signal_time = datetime.now()
                 
                 # Step 5: Execute signal if generated
                 account_info = self.data_provider.get_account_info()
