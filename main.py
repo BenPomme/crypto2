@@ -265,13 +265,17 @@ class CryptoTradingBot:
     def _execute_trading_cycle(self) -> None:
         """Execute one complete trading cycle for all symbols"""
         try:
+            # Log symbol processing every 20 cycles to track missing symbols
+            if self.cycle_count % 20 == 0:
+                self.logger.info(f"🔄 Processing {len(self.trading_symbols)} symbols: {self.trading_symbols}")
+            
             # Cycle through all trading symbols
             for symbol in self.trading_symbols:
                 try:
                     self._execute_symbol_cycle(symbol)
                 except Exception as e:
                     # Log error but continue with other symbols
-                    self.logger.error(f"Error in trading cycle for {symbol}: {e}")
+                    self.logger.error(f"❌ Error in trading cycle for {symbol}: {e}")
                     continue
                 
         except Exception as e:
