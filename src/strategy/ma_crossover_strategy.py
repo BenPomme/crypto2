@@ -126,6 +126,12 @@ class MACrossoverStrategy(BaseStrategy):
             golden_cross = (prev_fast_ma <= prev_slow_ma) and (current_fast_ma > current_slow_ma)
             death_cross = (prev_fast_ma >= prev_slow_ma) and (current_fast_ma < current_slow_ma)
             
+            current_price = latest['close']
+            timestamp = latest.name if hasattr(latest, 'name') else datetime.now()
+            
+            # Use provided symbol or fallback to config
+            trading_symbol = symbol or self.config.get('symbol', 'BTCUSD')
+            
             # Debug logging for signal analysis (every 10 cycles to avoid spam)
             if hasattr(self, '_debug_cycle_counter'):
                 self._debug_cycle_counter += 1
@@ -133,17 +139,11 @@ class MACrossoverStrategy(BaseStrategy):
                 self._debug_cycle_counter = 1
                 
             if self._debug_cycle_counter % 10 == 0:
-                logger.info(f"🔍 {symbol} Signal Analysis:")
+                logger.info(f"🔍 {trading_symbol} Signal Analysis:")
                 logger.info(f"  Fast MA: {current_fast_ma:.4f} (prev: {prev_fast_ma:.4f})")
                 logger.info(f"  Slow MA: {current_slow_ma:.4f} (prev: {prev_slow_ma:.4f})")
                 logger.info(f"  Golden Cross: {golden_cross}, Death Cross: {death_cross}")
                 logger.info(f"  Position: {self.is_flat(trading_symbol)} (flat), {self.is_long(trading_symbol)} (long)")
-            
-            current_price = latest['close']
-            timestamp = latest.name if hasattr(latest, 'name') else datetime.now()
-            
-            # Use provided symbol or fallback to config
-            trading_symbol = symbol or self.config.get('symbol', 'BTCUSD')
             
             # Check for buy signal (golden cross)
             if golden_cross and self.is_flat(trading_symbol):
