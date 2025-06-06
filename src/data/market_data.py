@@ -48,11 +48,19 @@ class AlpacaDataProvider(MarketDataProvider):
         # Ensure base URL doesn't end with /v2 to prevent duplication
         base_url = settings.alpaca.endpoint.rstrip('/v2').rstrip('/')
         
+        # Trading API client (for account, orders, positions)
         self.api = REST(
             key_id=settings.alpaca.key,
             secret_key=settings.alpaca.secret,
-            base_url=base_url,
-            api_version='v2'
+            base_url=base_url
+            # REMOVED api_version to prevent /v2/v2/ duplication
+        )
+        
+        # Data API client (for market data - separate base URL per documentation)
+        self.data_api = REST(
+            key_id=settings.alpaca.key,
+            secret_key=settings.alpaca.secret,
+            base_url="https://data.alpaca.markets"
         )
         
         # Timeframe mapping
@@ -121,9 +129,11 @@ class AlpacaDataProvider(MarketDataProvider):
             start_str = start_time.strftime('%Y-%m-%dT%H:%M:%SZ')
             end_str = end_time.strftime('%Y-%m-%dT%H:%M:%SZ')
             
-            # Fetch data from Alpaca
+            # Fetch crypto data from Alpaca using correct data API and v1beta3 endpoint
             logger.info(f"Fetching {periods} periods of {timeframe} data for {symbol}")
-            bars = self.api.get_crypto_bars(
+            
+            # Use data API with v1beta3 crypto endpoint per documentation
+            bars = self.data_api.get_crypto_bars(
                 symbol,
                 timeframe=tf,
                 start=start_str,
@@ -223,8 +233,8 @@ class AlpacaDataProvider(MarketDataProvider):
     def get_latest_price(self, symbol: str) -> float:
         """Get latest price for symbol"""
         try:
-            # Get latest bar (most recent 1-minute candle)
-            bars = self.api.get_crypto_bars(
+            # Get latest bar (most recent 1-minute candle) using data API
+            bars = self.data_api.get_crypto_bars(
                 symbol,
                 timeframe=TimeFrame.Minute,
                 limit=1
