@@ -37,6 +37,11 @@ class MACrossoverStrategy(BaseStrategy):
             'exit_on_reverse_cross': True,
             'stop_loss_pct': None,  # Optional stop loss percentage
             'take_profit_pct': None,  # Optional take profit percentage
+            'rsi_oversold': 30.0,
+            'rsi_overbought': 70.0,
+            'min_confidence': 0.4,  # Lower threshold to allow more signals
+            'volume_threshold': 1.2,
+            'enable_trend_following': True,
         }
         
         if config:
@@ -120,6 +125,19 @@ class MACrossoverStrategy(BaseStrategy):
             # Detect crossover
             golden_cross = (prev_fast_ma <= prev_slow_ma) and (current_fast_ma > current_slow_ma)
             death_cross = (prev_fast_ma >= prev_slow_ma) and (current_fast_ma < current_slow_ma)
+            
+            # Debug logging for signal analysis (every 10 cycles to avoid spam)
+            if hasattr(self, '_debug_cycle_counter'):
+                self._debug_cycle_counter += 1
+            else:
+                self._debug_cycle_counter = 1
+                
+            if self._debug_cycle_counter % 10 == 0:
+                logger.info(f"🔍 {symbol} Signal Analysis:")
+                logger.info(f"  Fast MA: {current_fast_ma:.4f} (prev: {prev_fast_ma:.4f})")
+                logger.info(f"  Slow MA: {current_slow_ma:.4f} (prev: {prev_slow_ma:.4f})")
+                logger.info(f"  Golden Cross: {golden_cross}, Death Cross: {death_cross}")
+                logger.info(f"  Position: {self.is_flat(trading_symbol)} (flat), {self.is_long(trading_symbol)} (long)")
             
             current_price = latest['close']
             timestamp = latest.name if hasattr(latest, 'name') else datetime.now()
