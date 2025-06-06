@@ -7,6 +7,7 @@ from datetime import datetime
 from typing import Dict, Optional, List
 from collections import deque
 import logging
+import pytz
 
 logger = logging.getLogger(__name__)
 
@@ -54,7 +55,6 @@ class DataBuffer:
         # Ensure timezone-aware timestamp
         if bar_data['timestamp'].tzinfo is None:
             # Convert naive to UTC
-            import pytz
             bar_data['timestamp'] = pytz.utc.localize(bar_data['timestamp'])
         elif bar_data['timestamp'].tzinfo != pytz.utc:
             # Convert to UTC
