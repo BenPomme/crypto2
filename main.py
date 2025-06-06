@@ -292,23 +292,11 @@ class CryptoTradingBot:
                 
                 return
             
-            # Step 1: Get latest market data (REAL OHLCV bar)
-            self.logger.debug(f"Getting latest OHLCV bar for {symbol}")
-            latest_bar = self.data_provider.get_latest_bar(symbol)
-            
-            # Skip this symbol if no data available
-            if latest_bar is None:
-                self.logger.warning(f"No data available for {symbol}, skipping trading cycle")
-                return
-                
-            self.logger.debug(f"{symbol} latest bar: O=${latest_bar['open']:.2f}, H=${latest_bar['high']:.2f}, L=${latest_bar['low']:.2f}, C=${latest_bar['close']:.2f}, V={latest_bar['volume']:.0f}")
-            
-            # Add to symbol-specific buffer
+            # Step 1: Use existing buffer data (no need to fetch new bars every cycle)
+            # The buffers already have historical data from initialization
             if symbol not in self.data_buffers:
                 self.logger.warning(f"No data buffer for {symbol}, skipping")
                 return
-                
-            self.data_buffers[symbol].add_bar(latest_bar)
             
             # Step 2: Check if we have enough data for this symbol
             min_periods = self.strategy.get_min_periods()
