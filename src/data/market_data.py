@@ -103,8 +103,7 @@ class AlpacaDataProvider(MarketDataProvider):
         """
         try:
             # Get end time as now, start time based on periods (in UTC)
-            from datetime import timezone
-            end_time = datetime.now(timezone.utc)
+            end_time = datetime.now(self.utc)
             
             # Calculate start time based on timeframe and periods
             if timeframe == "1Min":
