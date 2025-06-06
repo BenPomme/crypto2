@@ -303,7 +303,7 @@ class FeatureEngineer:
         
         return result_df
     
-    def engineer_features(self, df: pd.DataFrame) -> pd.DataFrame:
+    def engineer_features(self, df: pd.DataFrame, custom_config: Optional[Dict[str, Any]] = None) -> pd.DataFrame:
         """
         Main feature engineering pipeline
         
@@ -319,8 +319,13 @@ class FeatureEngineer:
         
         logger.info(f"Starting feature engineering for {len(df)} bars")
         
-        # Start with technical indicators
-        result_df = self.indicators.calculate_all_indicators(df, self.default_config)
+        # Merge custom config with defaults
+        indicator_config = self.default_config.copy()
+        if custom_config:
+            indicator_config.update(custom_config)
+        
+        # Start with technical indicators using merged config
+        result_df = self.indicators.calculate_all_indicators(df, indicator_config)
         
         # Add various feature categories
         result_df = self.create_price_features(result_df)

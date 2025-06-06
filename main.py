@@ -20,6 +20,7 @@ from src.data.data_buffer import DataBuffer
 from src.strategy.feature_engineering import FeatureEngineer
 from src.strategy.ma_crossover_strategy import MACrossoverStrategy
 from src.strategy.parameter_manager import ParameterManager
+from integrate_optimization import OptimizedParameterManager
 from src.risk.risk_manager import RiskManager
 from src.execution.trade_executor import TradeExecutor
 from src.monitoring.performance_tracker import PerformanceTracker
@@ -127,6 +128,12 @@ class CryptoTradingBot:
             
             # Parameter manager for ML-optimizable parameters (after Firebase initialization)
             self.parameter_manager = ParameterManager(firebase_logger=self.performance_tracker.firebase_logger)
+            
+            # Optimized parameter manager - loads parameters from optimization results
+            # Use demo file if available (has BTC, ETH, SOL, DOGE), otherwise use main file
+            param_file = "demo_optimized_parameters.json" if self.config.get('use_demo_params', True) else "optimized_parameters.json"
+            self.optimized_param_manager = OptimizedParameterManager(param_file)
+            self.logger.info(f"Using optimization parameters from: {param_file}")
             
             # Strategy initialization (after parameter manager)
             strategy_config = {
@@ -280,23 +287,10 @@ class CryptoTradingBot:
                 
                 return
             
-            # Step 1: Get latest market data
-            self.logger.debug(f"Getting latest price for {symbol}")
-            latest_price = self.data_provider.get_latest_price(symbol)
-            self.logger.debug(f"{symbol} latest price: ${latest_price:.2f}")
-            
-            # Create synthetic bar (in production, would get actual OHLCV bar)
-            # Use timezone-aware datetime to match Alpaca data
-            from datetime import timezone
-            current_time = datetime.now(timezone.utc)
-            latest_bar = {
-                'timestamp': current_time,
-                'open': latest_price,
-                'high': latest_price,
-                'low': latest_price,
-                'close': latest_price,
-                'volume': 1000  # Placeholder volume
-            }
+            # Step 1: Get latest market data (REAL OHLCV bar)
+            self.logger.debug(f"Getting latest OHLCV bar for {symbol}")
+            latest_bar = self.data_provider.get_latest_bar(symbol)
+            self.logger.debug(f"{symbol} latest bar: O=${latest_bar['open']:.2f}, H=${latest_bar['high']:.2f}, L=${latest_bar['low']:.2f}, C=${latest_bar['close']:.2f}, V={latest_bar['volume']:.0f}")
             
             # Add to symbol-specific buffer
             if symbol not in self.data_buffers:
@@ -311,11 +305,20 @@ class CryptoTradingBot:
                 self.logger.debug(f"Insufficient data for {symbol}: {self.data_buffers[symbol].size()}/{min_periods}")
                 return
             
-            # Step 3: Get data and engineer features for this symbol
-            market_data = self.data_buffers[symbol].get_dataframe()
-            featured_data = self.feature_engineer.engineer_features(market_data)
+            # Step 3: Apply optimized parameters for this symbol (if available)
+            optimized_params = self.optimized_param_manager.get_parameters_for_symbol(symbol)
+            if optimized_params:
+                self.strategy.update_parameters(optimized_params)
             
-            # Step 4: Generate trading signal for this symbol
+            # Step 4: Get data and engineer features with strategy's MA periods
+            market_data = self.data_buffers[symbol].get_dataframe()
+            feature_config = {
+                'ma_fast': self.strategy.fast_period,
+                'ma_slow': self.strategy.slow_period
+            }
+            featured_data = self.feature_engineer.engineer_features(market_data, custom_config=feature_config)
+            
+            # Step 5: Generate trading signal for this symbol
             signal = self.strategy.generate_signal(featured_data, symbol)
             
             # Log signal generation details
@@ -422,16 +425,27 @@ class CryptoTradingBot:
             
             market_info = ", ".join(market_status)
             
-            self.logger.info(
-                f"Status - Cycle: {self.cycle_count}, "
-                f"Portfolio: ${account_info.get('portfolio_value', 0):.2f}, "
-                f"Return: {performance.get('total_return', 0):.2%}, "
-                f"Trades: {performance.get('num_trades', 0)}, "
-                f"Win Rate: {performance.get('win_rate', 0):.1%}, "
-                f"Buffers: [{buffer_info}], "
-                f"Markets: [{market_info}], "
-                f"Success Rate: {execution_stats.get('success_rate', 0):.1%}"
-            )
+            # Calculate additional metrics
+            total_pnl = performance.get('total_pnl', 0)
+            sharpe_ratio = performance.get('sharpe_ratio', 0)
+            max_drawdown = performance.get('max_drawdown', 0)
+            
+            self.logger.info("=" * 80)
+            self.logger.info(f"🚀 TRADING BOT STATUS - Cycle {self.cycle_count}")
+            self.logger.info("=" * 80)
+            self.logger.info(f"💰 PERFORMANCE METRICS:")
+            self.logger.info(f"   Portfolio Value: ${account_info.get('portfolio_value', 0):,.2f}")
+            self.logger.info(f"   Total Return (ROI): {performance.get('total_return', 0):.2%}")
+            self.logger.info(f"   Total P&L: ${total_pnl:,.2f}")
+            self.logger.info(f"   Total Trades: {performance.get('num_trades', 0)}")
+            self.logger.info(f"   Win Rate: {performance.get('win_rate', 0):.1%}")
+            self.logger.info(f"   Sharpe Ratio: {sharpe_ratio:.2f}")
+            self.logger.info(f"   Max Drawdown: {max_drawdown:.2%}")
+            self.logger.info(f"📊 SYSTEM STATUS:")
+            self.logger.info(f"   Data Buffers: [{buffer_info}]")
+            self.logger.info(f"   Markets: [{market_info}]")
+            self.logger.info(f"   Execution Success Rate: {execution_stats.get('success_rate', 0):.1%}")
+            self.logger.info("=" * 80)
             
         except Exception as e:
             self.logger.error(f"Error logging status: {e}")

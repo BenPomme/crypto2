@@ -184,6 +184,38 @@ class MACrossoverStrategy(BaseStrategy):
             logger.error(f"Error generating MA crossover signal: {e}")
             return None
     
+    def update_parameters(self, optimized_params: Dict[str, Any]) -> None:
+        """
+        Update strategy with optimized parameters from optimization results
+        
+        Args:
+            optimized_params: Dictionary of optimized parameters
+        """
+        # Update MA periods if provided
+        if 'fast_ma_period' in optimized_params:
+            old_fast = self.fast_period
+            self.fast_period = int(optimized_params['fast_ma_period'])
+            if old_fast != self.fast_period:
+                logger.info(f"Updated fast MA period: {old_fast} -> {self.fast_period}")
+        
+        if 'slow_ma_period' in optimized_params:
+            old_slow = self.slow_period
+            self.slow_period = int(optimized_params['slow_ma_period'])
+            if old_slow != self.slow_period:
+                logger.info(f"Updated slow MA period: {old_slow} -> {self.slow_period}")
+        
+        # Update other strategy parameters
+        if 'confidence_threshold' in optimized_params:
+            self.config['min_confidence'] = float(optimized_params['confidence_threshold'])
+            
+        if 'risk_per_trade' in optimized_params:
+            self.config['risk_per_trade'] = float(optimized_params['risk_per_trade'])
+        
+        if 'volume_threshold' in optimized_params:
+            self.config['volume_threshold'] = float(optimized_params['volume_threshold'])
+        
+        logger.info(f"Applied optimized parameters: fast={self.fast_period}, slow={self.slow_period}")
+
     def update_dynamic_parameters(self) -> None:
         """Update strategy with latest dynamic parameters from parameter manager"""
         if self.parameter_manager:

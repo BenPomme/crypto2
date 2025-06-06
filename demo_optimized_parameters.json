@@ -1,0 +1,69 @@
+{
+  "optimization_date": "2025-06-05T16:26:55.466814",
+  "best_overall": {
+    "symbol": "BTC/USD",
+    "score": 1.847
+  },
+  "pairs": {
+    "BTC/USD": {
+      "parameters": {
+        "fast_ma_period": 12,
+        "slow_ma_period": 28,
+        "risk_per_trade": 0.025,
+        "confidence_threshold": 0.65
+      },
+      "confidence": 0.85,
+      "performance": {
+        "sharpe_ratio": 1.847,
+        "total_return": 0.234,
+        "win_rate": 0.628,
+        "max_drawdown": 0.083
+      }
+    },
+    "ETH/USD": {
+      "parameters": {
+        "fast_ma_period": 10,
+        "slow_ma_period": 25,
+        "risk_per_trade": 0.03,
+        "confidence_threshold": 0.7
+      },
+      "confidence": 0.85,
+      "performance": {
+        "sharpe_ratio": 1.623,
+        "total_return": 0.189,
+        "win_rate": 0.612,
+        "max_drawdown": 0.095
+      }
+    },
+    "SOL/USD": {
+      "parameters": {
+        "fast_ma_period": 14,
+        "slow_ma_period": 32,
+        "risk_per_trade": 0.02,
+        "confidence_threshold": 0.6
+      },
+      "confidence": 0.85,
+      "performance": {
+        "sharpe_ratio": 1.456,
+        "total_return": 0.167,
+        "win_rate": 0.594,
+        "max_drawdown": 0.107
+      }
+    },
+    "DOGE/USD": {
+      "parameters": {
+        "fast_ma_period": 8,
+        "slow_ma_period": 22,
+        "risk_per_trade": 0.015,
+        "confidence_threshold": 0.75
+      },
+      "confidence": 0.85,
+      "performance": {
+        "sharpe_ratio": 1.234,
+        "total_return": 0.145,
+        "win_rate": 0.583,
+        "max_drawdown": 0.089
+      }
+    }
+  }
+}

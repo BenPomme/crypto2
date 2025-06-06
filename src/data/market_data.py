@@ -179,6 +179,39 @@ class AlpacaDataProvider(MarketDataProvider):
             logger.error(f"Error fetching historical data for {symbol}: {e}")
             raise
     
+    def get_latest_bar(self, symbol: str) -> Dict[str, Any]:
+        """
+        Get the latest OHLCV bar for a symbol
+        
+        Args:
+            symbol: Trading symbol
+            
+        Returns:
+            Dictionary with latest OHLCV bar data
+        """
+        try:
+            # Get the latest 2 bars to ensure we have current data
+            historical_data = self.get_historical_data(symbol, timeframe="1Min", periods=2)
+            
+            if historical_data.empty:
+                raise ValueError(f"No data available for {symbol}")
+            
+            # Get the most recent bar
+            latest_row = historical_data.iloc[-1]
+            
+            return {
+                'timestamp': latest_row.name,  # Index is timestamp
+                'open': float(latest_row['open']),
+                'high': float(latest_row['high']),
+                'low': float(latest_row['low']),
+                'close': float(latest_row['close']),
+                'volume': float(latest_row['volume'])
+            }
+            
+        except Exception as e:
+            logger.error(f"Failed to get latest bar for {symbol}: {e}")
+            raise
+    
     def get_latest_price(self, symbol: str) -> float:
         """Get latest price for symbol"""
         try:

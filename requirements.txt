@@ -6,8 +6,11 @@ numpy>=1.20.0,<2.0.0
 # Technical analysis
 pandas-ta>=0.3.14b0
 
-# Basic ML
+# Machine Learning and Optimization
 scikit-learn
+river>=0.21.0  # Online learning for parameter adaptation
+scipy>=1.9.0   # Optimization algorithms
+optuna>=3.0.0  # Advanced hyperparameter optimization
 
 # Firebase logging
 firebase-admin
@@ -16,6 +19,10 @@ firebase-admin
 python-dotenv
 pydantic>=2.0.0
 pydantic-settings
+
+# Visualization (for performance analysis)
+matplotlib>=3.5.0
+seaborn>=0.11.0
 
 # Utilities
 python-dateutil
