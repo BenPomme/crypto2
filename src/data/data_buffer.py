@@ -44,12 +44,21 @@ class DataBuffer:
             if field not in bar_data:
                 raise ValueError(f"Missing required field: {field}")
         
-        # Ensure timestamp is datetime
+        # Ensure timestamp is datetime and timezone-aware
         if not isinstance(bar_data['timestamp'], datetime):
             if isinstance(bar_data['timestamp'], str):
-                bar_data['timestamp'] = pd.to_datetime(bar_data['timestamp'])
+                bar_data['timestamp'] = pd.to_datetime(bar_data['timestamp'], utc=True)
             else:
                 raise ValueError("Timestamp must be datetime or string")
+        
+        # Ensure timezone-aware timestamp
+        if bar_data['timestamp'].tzinfo is None:
+            # Convert naive to UTC
+            import pytz
+            bar_data['timestamp'] = pytz.utc.localize(bar_data['timestamp'])
+        elif bar_data['timestamp'].tzinfo != pytz.utc:
+            # Convert to UTC
+            bar_data['timestamp'] = bar_data['timestamp'].astimezone(pytz.utc)
         
         self._data.append(bar_data.copy())
         
