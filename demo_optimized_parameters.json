@@ -10,7 +10,15 @@
         "fast_ma_period": 12,
         "slow_ma_period": 28,
         "risk_per_trade": 0.025,
-        "confidence_threshold": 0.65
+        "confidence_threshold": 0.65,
+        "volume_threshold": 2.0,
+        "mfi_oversold": 24,
+        "mfi_overbought": 80,
+        "macd_fast": 12,
+        "macd_slow": 26,
+        "macd_signal": 9,
+        "bb_period": 20,
+        "bb_std": 2.0
       },
       "confidence": 0.85,
       "performance": {
@@ -25,7 +33,15 @@
         "fast_ma_period": 10,
         "slow_ma_period": 25,
         "risk_per_trade": 0.03,
-        "confidence_threshold": 0.7
+        "confidence_threshold": 0.7,
+        "volume_threshold": 2.1,
+        "mfi_oversold": 22,
+        "mfi_overbought": 81,
+        "macd_fast": 13,
+        "macd_slow": 27,
+        "macd_signal": 11,
+        "bb_period": 21,
+        "bb_std": 2.0
       },
       "confidence": 0.85,
       "performance": {
@@ -40,7 +56,15 @@
         "fast_ma_period": 14,
         "slow_ma_period": 32,
         "risk_per_trade": 0.02,
-        "confidence_threshold": 0.6
+        "confidence_threshold": 0.6,
+        "volume_threshold": 1.9,
+        "mfi_oversold": 23,
+        "mfi_overbought": 79,
+        "macd_fast": 11,
+        "macd_slow": 25,
+        "macd_signal": 10,
+        "bb_period": 19,
+        "bb_std": 2.1
       },
       "confidence": 0.85,
       "performance": {
@@ -55,7 +79,15 @@
         "fast_ma_period": 8,
         "slow_ma_period": 22,
         "risk_per_trade": 0.015,
-        "confidence_threshold": 0.75
+        "confidence_threshold": 0.75,
+        "volume_threshold": 1.8,
+        "mfi_oversold": 25,
+        "mfi_overbought": 78,
+        "macd_fast": 12,
+        "macd_slow": 26,
+        "macd_signal": 9,
+        "bb_period": 20,
+        "bb_std": 2.0
       },
       "confidence": 0.85,
       "performance": {
@@ -63,6 +95,29 @@
         "total_return": 0.145,
         "win_rate": 0.583,
         "max_drawdown": 0.089
+      }
+    },
+    "AVAX/USD": {
+      "parameters": {
+        "fast_ma_period": 10,
+        "slow_ma_period": 26,
+        "risk_per_trade": 0.022,
+        "confidence_threshold": 0.68,
+        "volume_threshold": 2.2,
+        "mfi_oversold": 20,
+        "mfi_overbought": 82,
+        "macd_fast": 12,
+        "macd_slow": 26,
+        "macd_signal": 9,
+        "bb_period": 20,
+        "bb_std": 2.0
+      },
+      "confidence": 0.85,
+      "performance": {
+        "sharpe_ratio": 1.356,
+        "total_return": 0.156,
+        "win_rate": 0.587,
+        "max_drawdown": 0.092
       }
     }
   }

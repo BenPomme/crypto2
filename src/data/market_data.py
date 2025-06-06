@@ -199,8 +199,15 @@ class AlpacaDataProvider(MarketDataProvider):
             # Get the most recent bar
             latest_row = historical_data.iloc[-1]
             
+            # Ensure timestamp is properly formatted
+            timestamp = latest_row.name
+            if pd.isna(timestamp):
+                timestamp = datetime.now(self.utc)
+            elif not isinstance(timestamp, datetime):
+                timestamp = pd.to_datetime(timestamp)
+            
             return {
-                'timestamp': latest_row.name,  # Index is timestamp
+                'timestamp': timestamp,
                 'open': float(latest_row['open']),
                 'high': float(latest_row['high']),
                 'low': float(latest_row['low']),
