@@ -304,9 +304,15 @@ class TechnicalIndicators:
                 result_df['bb_middle'] = bb_sma
                 
                 # Calculate BB width and position for logging
-                bb_width_pct = ((result_df['bb_upper'].iloc[-1] - result_df['bb_lower'].iloc[-1]) / bb_sma.iloc[-1]) * 100
+                bb_width = result_df['bb_upper'].iloc[-1] - result_df['bb_lower'].iloc[-1]
+                bb_width_pct = (bb_width / bb_sma.iloc[-1]) * 100 if bb_sma.iloc[-1] > 0 else 0
                 current_price = df['close'].iloc[-1]
-                bb_position = (current_price - result_df['bb_lower'].iloc[-1]) / (result_df['bb_upper'].iloc[-1] - result_df['bb_lower'].iloc[-1])
+                
+                # Avoid division by zero for BB position
+                if bb_width > 1e-10:  # Minimum meaningful width
+                    bb_position = (current_price - result_df['bb_lower'].iloc[-1]) / bb_width
+                else:
+                    bb_position = 0.5  # Neutral position when bands are too tight
                 
                 logger.info(f"Bollinger Bands calculated: Upper=${result_df['bb_upper'].iloc[-1]:.2f}, Lower=${result_df['bb_lower'].iloc[-1]:.2f}, Width={bb_width_pct:.1f}%, Position={bb_position:.2f}")
                 
