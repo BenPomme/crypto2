@@ -39,9 +39,11 @@ class MACrossoverStrategy(BaseStrategy):
             'take_profit_pct': None,  # Optional take profit percentage
             'rsi_oversold': 30.0,
             'rsi_overbought': 70.0,
-            'min_confidence': 0.4,  # Lower threshold to allow more signals
-            'volume_threshold': 1.2,
+            'min_confidence': 0.3,  # Much lower threshold for more opportunities
+            'volume_threshold': 0.8,  # Lower volume requirement
             'enable_trend_following': True,
+            'enable_momentum_entry': True,  # New: Enter on momentum signals
+            'enable_breakout_entry': True,  # New: Enter on Bollinger Band breakouts
         }
         
         if config:
@@ -157,19 +159,38 @@ class MACrossoverStrategy(BaseStrategy):
                   self.is_flat(trading_symbol) and 
                   self.config.get('enable_trend_following', True)):
                 
-                # Only if the trend is strong and accelerating
+                # Much more aggressive trend following
                 ma_spread_pct = ((current_fast_ma - current_slow_ma) / current_slow_ma) * 100
                 prev_ma_spread_pct = ((prev_fast_ma - prev_slow_ma) / prev_slow_ma) * 100
                 
-                # Check if trend is accelerating and spread is meaningful
-                if (ma_spread_pct > 0.5 and  # At least 0.5% spread between MAs
-                    ma_spread_pct > prev_ma_spread_pct and  # Accelerating trend
-                    current_price > current_fast_ma):  # Price above fast MA
+                # AGGRESSIVE: Enter on ANY meaningful uptrend
+                if (ma_spread_pct > 0.1 or  # Even small spread (0.1% vs 0.5%)
+                    (ma_spread_pct > prev_ma_spread_pct and ma_spread_pct > 0.05) or  # Accelerating
+                    current_price > current_fast_ma):  # Price momentum
                     
                     signal = self._evaluate_trend_continuation_signal(latest, data, trading_symbol)
                     if signal:
                         self.log_signal(signal)
                         return signal
+            
+            # NEW: Momentum entry for strong trends (even without acceleration)
+            elif (current_fast_ma > current_slow_ma and 
+                  self.is_flat(trading_symbol) and 
+                  self.config.get('enable_momentum_entry', True)):
+                
+                signal = self._evaluate_momentum_entry_signal(latest, data, trading_symbol)
+                if signal:
+                    self.log_signal(signal)
+                    return signal
+            
+            # NEW: Bollinger Band breakout entry
+            elif (self.is_flat(trading_symbol) and 
+                  self.config.get('enable_breakout_entry', True)):
+                
+                signal = self._evaluate_breakout_signal(latest, data, trading_symbol)
+                if signal:
+                    self.log_signal(signal)
+                    return signal
             
             # Check for sell signal (death cross) - only if we have a position to close
             elif death_cross and self.is_long(trading_symbol) and self.config['exit_on_reverse_cross']:
@@ -435,8 +456,8 @@ class MACrossoverStrategy(BaseStrategy):
         current_price = latest['close']
         timestamp = latest.name if hasattr(latest, 'name') else datetime.now()
         
-        # Lower base confidence for trend continuation vs fresh crossover
-        confidence = 0.4
+        # AGGRESSIVE: Start with higher confidence for trend continuation
+        confidence = 0.35  # Easier to reach threshold
         reasons = ["Trend continuation signal"]
         
         # Calculate MA spread strength
@@ -679,6 +700,122 @@ class MACrossoverStrategy(BaseStrategy):
                             'entry_price': entry_price
                         }
                     )
+        
+        return None
+    
+    def _evaluate_momentum_entry_signal(self, latest: pd.Series, data: pd.DataFrame, symbol: str) -> Optional[TradingSignal]:
+        """
+        Evaluate momentum entry for existing uptrends
+        """
+        current_price = latest['close']
+        timestamp = latest.name if hasattr(latest, 'name') else datetime.now()
+        
+        fast_ma = latest[f'{self.ma_type}_fast']
+        slow_ma = latest[f'{self.ma_type}_slow']
+        
+        # Only enter if in clear uptrend
+        if fast_ma <= slow_ma:
+            return None
+            
+        # Base confidence for momentum entry
+        confidence = 0.3  # Lower starting point
+        reasons = ["Momentum entry on uptrend"]
+        
+        # MA spread strength
+        ma_spread_pct = ((fast_ma - slow_ma) / slow_ma) * 100
+        if ma_spread_pct > 0.2:
+            confidence += 0.1
+            reasons.append(f"Strong MA spread ({ma_spread_pct:.2f}%)")
+        
+        # Price above fast MA
+        if current_price > fast_ma:
+            price_momentum = ((current_price - fast_ma) / fast_ma) * 100
+            if price_momentum > 0.1:
+                confidence += 0.1
+                reasons.append(f"Price momentum ({price_momentum:.2f}%)")
+        
+        # RSI not overbought
+        if 'rsi' in latest:
+            rsi = latest['rsi']
+            if not pd.isna(rsi) and rsi < 75:  # More lenient
+                confidence += 0.1
+                reasons.append(f"RSI healthy ({rsi:.1f})")
+        
+        # MACD bullish
+        if 'macd_bullish' in latest and latest['macd_bullish'] == 1:
+            confidence += 0.1
+            reasons.append("MACD bullish")
+        
+        if confidence >= self.config.get('min_confidence', 0.3):
+            return TradingSignal(
+                signal_type=SignalType.BUY,
+                symbol=symbol,
+                timestamp=timestamp,
+                price=current_price,
+                confidence=min(confidence, 1.0),
+                reason="; ".join(reasons),
+                metadata={
+                    'fast_ma': fast_ma,
+                    'slow_ma': slow_ma,
+                    'ma_spread_pct': ma_spread_pct,
+                    'signal_type': 'momentum_entry'
+                }
+            )
+        return None
+    
+    def _evaluate_breakout_signal(self, latest: pd.Series, data: pd.DataFrame, symbol: str) -> Optional[TradingSignal]:
+        """
+        Evaluate Bollinger Band breakout signals
+        """
+        if not all(col in latest for col in ['bb_upper', 'bb_lower', 'bb_middle']):
+            return None
+            
+        current_price = latest['close']
+        timestamp = latest.name if hasattr(latest, 'name') else datetime.now()
+        
+        bb_upper = latest['bb_upper']
+        bb_lower = latest['bb_lower']
+        bb_middle = latest['bb_middle']
+        
+        if any(pd.isna([bb_upper, bb_lower, bb_middle])):
+            return None
+        
+        # Calculate BB position
+        bb_position = (current_price - bb_lower) / (bb_upper - bb_lower)
+        
+        # Breakout above upper band or strong move above middle
+        if bb_position > 0.8:  # Near or above upper band
+            confidence = 0.4
+            reasons = ["BB breakout signal"]
+            
+            # Volume confirmation
+            if 'volume_ratio' in latest and not pd.isna(latest['volume_ratio']):
+                if latest['volume_ratio'] > 1.0:
+                    confidence += 0.1
+                    reasons.append("Volume support")
+            
+            # RSI confirmation
+            if 'rsi' in latest:
+                rsi = latest['rsi']
+                if not pd.isna(rsi) and rsi > 50 and rsi < 80:
+                    confidence += 0.1
+                    reasons.append(f"RSI momentum ({rsi:.1f})")
+            
+            if confidence >= self.config.get('min_confidence', 0.3):
+                return TradingSignal(
+                    signal_type=SignalType.BUY,
+                    symbol=symbol,
+                    timestamp=timestamp,
+                    price=current_price,
+                    confidence=min(confidence, 1.0),
+                    reason="; ".join(reasons),
+                    metadata={
+                        'bb_position': bb_position,
+                        'bb_upper': bb_upper,
+                        'bb_lower': bb_lower,
+                        'signal_type': 'breakout_entry'
+                    }
+                )
         
         return None
     
