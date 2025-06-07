@@ -44,6 +44,10 @@ class MACrossoverStrategy(BaseStrategy):
             'enable_trend_following': True,
             'enable_momentum_entry': True,  # New: Enter on momentum signals
             'enable_breakout_entry': True,  # New: Enter on Bollinger Band breakouts
+            'leverage': 3.0,  # 3x leverage for crypto
+            'leverage_take_profit_pct': 1.5,  # Take profit at 1.5% with 3x leverage = 4.5% effective
+            'leverage_stop_loss_pct': 1.0,  # Stop loss at 1% with 3x leverage = 3% loss
+            'quick_profit_pct': 0.8,  # Quick scalp profits at 0.8% (2.4% effective with 3x)
         }
         
         if config:
@@ -600,8 +604,68 @@ class MACrossoverStrategy(BaseStrategy):
         if pnl_pct is None:
             return None
         
-        # Check stop loss
-        if self.config['stop_loss_pct'] and pnl_pct <= -abs(self.config['stop_loss_pct']):
+        # LEVERAGE-AWARE EXIT LOGIC
+        leverage = self.config.get('leverage', 1.0)
+        
+        # Leverage stop loss (tighter for leveraged positions)
+        leverage_stop_loss = self.config.get('leverage_stop_loss_pct')
+        if leverage_stop_loss and pnl_pct <= -abs(leverage_stop_loss):
+            return TradingSignal(
+                signal_type=SignalType.CLOSE_LONG if self.is_long(symbol) else SignalType.CLOSE_SHORT,
+                symbol=symbol,
+                timestamp=timestamp,
+                price=current_price,
+                confidence=0.95,
+                reason=f"Leverage stop loss triggered ({pnl_pct:.2f}%, {leverage}x effective: {pnl_pct*leverage:.2f}%)",
+                metadata={
+                    'exit_type': 'leverage_stop_loss',
+                    'pnl_pct': pnl_pct,
+                    'effective_pnl': pnl_pct * leverage,
+                    'leverage': leverage,
+                    'entry_price': entry_price
+                }
+            )
+        
+        # Quick scalp profits (very tight for frequent wins)
+        quick_profit = self.config.get('quick_profit_pct')
+        if quick_profit and pnl_pct >= quick_profit:
+            return TradingSignal(
+                signal_type=SignalType.CLOSE_LONG if self.is_long(symbol) else SignalType.CLOSE_SHORT,
+                symbol=symbol,
+                timestamp=timestamp,
+                price=current_price,
+                confidence=0.85,
+                reason=f"Quick scalp profit ({pnl_pct:.2f}%, {leverage}x effective: {pnl_pct*leverage:.2f}%)",
+                metadata={
+                    'exit_type': 'quick_scalp',
+                    'pnl_pct': pnl_pct,
+                    'effective_pnl': pnl_pct * leverage,
+                    'leverage': leverage,
+                    'entry_price': entry_price
+                }
+            )
+        
+        # Main leverage take profit
+        leverage_take_profit = self.config.get('leverage_take_profit_pct')
+        if leverage_take_profit and pnl_pct >= leverage_take_profit:
+            return TradingSignal(
+                signal_type=SignalType.CLOSE_LONG if self.is_long(symbol) else SignalType.CLOSE_SHORT,
+                symbol=symbol,
+                timestamp=timestamp,
+                price=current_price,
+                confidence=0.9,
+                reason=f"Leverage take profit ({pnl_pct:.2f}%, {leverage}x effective: {pnl_pct*leverage:.2f}%)",
+                metadata={
+                    'exit_type': 'leverage_take_profit',
+                    'pnl_pct': pnl_pct,
+                    'effective_pnl': pnl_pct * leverage,
+                    'leverage': leverage,
+                    'entry_price': entry_price
+                }
+            )
+        
+        # Fallback to original stop/take profit if configured
+        if self.config.get('stop_loss_pct') and pnl_pct <= -abs(self.config['stop_loss_pct']):
             return TradingSignal(
                 signal_type=SignalType.CLOSE_LONG if self.is_long(symbol) else SignalType.CLOSE_SHORT,
                 symbol=symbol,
@@ -616,8 +680,7 @@ class MACrossoverStrategy(BaseStrategy):
                 }
             )
         
-        # Check take profit
-        if self.config['take_profit_pct'] and pnl_pct >= self.config['take_profit_pct']:
+        if self.config.get('take_profit_pct') and pnl_pct >= self.config['take_profit_pct']:
             return TradingSignal(
                 signal_type=SignalType.CLOSE_LONG if self.is_long(symbol) else SignalType.CLOSE_SHORT,
                 symbol=symbol,
@@ -641,18 +704,24 @@ class MACrossoverStrategy(BaseStrategy):
             if not any(pd.isna([bb_upper, bb_lower, bb_middle])):
                 bb_position = (current_price - bb_lower) / (bb_upper - bb_lower)
                 
-                # Exit if price hits upper Bollinger Band (potential reversal)
-                if self.is_long(symbol) and bb_position > 0.95:
+                # LEVERAGE-AWARE BB exits (more aggressive for leveraged positions)
+                leverage = self.config.get('leverage', 1.0)
+                
+                # Exit at lower BB threshold for leveraged positions
+                bb_exit_threshold = 0.95 if leverage <= 1.0 else 0.85  # Earlier exit with leverage
+                
+                if self.is_long(symbol) and bb_position > bb_exit_threshold:
                     return TradingSignal(
                         signal_type=SignalType.CLOSE_LONG,
                         symbol=symbol,
                         timestamp=timestamp,
                         price=current_price,
-                        confidence=0.7,
-                        reason=f"BB upper band exit (overbought)",
+                        confidence=0.8,
+                        reason=f"Leverage BB exit ({bb_position:.2f} position, {leverage}x leverage)",
                         metadata={
-                            'exit_type': 'bb_upper_exit',
+                            'exit_type': 'leverage_bb_exit',
                             'bb_position': bb_position,
+                            'leverage': leverage,
                             'pnl_pct': pnl_pct,
                             'entry_price': entry_price
                         }
@@ -700,6 +769,38 @@ class MACrossoverStrategy(BaseStrategy):
                             'entry_price': entry_price
                         }
                     )
+        
+        # LEVERAGE TRAILING STOP (dynamic exit for maximizing leveraged gains)
+        leverage = self.config.get('leverage', 1.0)
+        if leverage > 1.0 and self.is_long(symbol) and pnl_pct > 0.5:  # Only if profitable
+            # Calculate trailing stop based on recent high
+            if hasattr(self, f'_max_pnl_{symbol}'):
+                max_pnl = getattr(self, f'_max_pnl_{symbol}')
+                max_pnl = max(max_pnl, pnl_pct)
+                setattr(self, f'_max_pnl_{symbol}', max_pnl)
+            else:
+                max_pnl = pnl_pct
+                setattr(self, f'_max_pnl_{symbol}', max_pnl)
+            
+            # Trailing stop at 0.3% below peak for leveraged positions
+            trailing_distance = 0.3
+            if pnl_pct <= (max_pnl - trailing_distance):
+                return TradingSignal(
+                    signal_type=SignalType.CLOSE_LONG,
+                    symbol=symbol,
+                    timestamp=timestamp,
+                    price=current_price,
+                    confidence=0.9,
+                    reason=f"Leverage trailing stop (peak: {max_pnl:.2f}%, current: {pnl_pct:.2f}%)",
+                    metadata={
+                        'exit_type': 'leverage_trailing_stop',
+                        'max_pnl': max_pnl,
+                        'pnl_pct': pnl_pct,
+                        'leverage': leverage,
+                        'effective_max': max_pnl * leverage,
+                        'entry_price': entry_price
+                    }
+                )
         
         return None
     
