@@ -39,7 +39,7 @@ class MACrossoverStrategy(BaseStrategy):
             'take_profit_pct': None,  # Optional take profit percentage
             'rsi_oversold': 30.0,
             'rsi_overbought': 70.0,
-            'min_confidence': 0.3,  # Much lower threshold for more opportunities
+            'min_confidence': 0.1,  # Very low threshold for immediate trading
             'volume_threshold': 0.8,  # Lower volume requirement
             'enable_trend_following': True,
             'enable_momentum_entry': True,  # New: Enter on momentum signals

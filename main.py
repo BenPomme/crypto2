@@ -137,14 +137,14 @@ class CryptoTradingBot:
             
             # Strategy initialization (after parameter manager)
             strategy_config = {
-                'volume_confirmation': True,
+                'volume_confirmation': False,  # Disable volume confirmation temporarily
                 'stop_loss_pct': 0.02,  # Match executor config
                 'take_profit_pct': 0.06,  # Match executor config
                 'min_periods': 20,  # Faster signal generation
-                'min_confidence': 0.2,  # Even lower threshold for trending markets
+                'min_confidence': 0.1,  # VERY low threshold to generate more trades
                 'rsi_oversold': 30.0,  # Standard RSI levels
-                'rsi_overbought': 75.0,  # Higher threshold for strong uptrends
-                'volume_threshold': 0.8,  # Lower volume requirement (easier to meet)
+                'rsi_overbought': 80.0,  # Higher threshold for strong uptrends
+                'volume_threshold': 0.5,  # Lower volume requirement (easier to meet)
                 'enable_trend_following': True,  # Enable trend continuation signals
             }
             self.strategy = MACrossoverStrategy(strategy_config, self.parameter_manager)

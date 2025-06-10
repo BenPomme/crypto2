@@ -319,20 +319,30 @@ class TechnicalIndicators:
             except Exception as e:
                 logger.warning(f"Skipping Bollinger Bands: {e}")
             
-            # Enhanced volume analysis with OBV and MFI
+            # Enhanced volume analysis with OBV and MFI - FIXED VERSION
             try:
-                result_df['volume_ma'] = df['volume'].rolling(window=20, min_periods=1).mean()
-                result_df['volume_ratio'] = df['volume'] / (result_df['volume_ma'] + 1e-10)
+                # VOLUME FIX: Ensure volume data is meaningful for crypto
+                volume_data = df['volume'].fillna(0)
+                if volume_data.sum() == 0 or volume_data.mean() < 1e-6:
+                    # Handle missing/zero volume data - use price-based proxy
+                    logger.warning("Low/zero volume detected, using price-based volume proxy")
+                    volume_data = abs(df['close'].pct_change()).fillna(0) * 1000000  # Price volatility as volume proxy
                 
-                # On-Balance Volume (OBV) - Custom implementation for reliability
+                result_df['volume_ma'] = volume_data.rolling(window=20, min_periods=1).mean()
+                volume_ma_safe = result_df['volume_ma'].replace(0, result_df['volume_ma'].mean())
+                result_df['volume_ratio'] = volume_data / volume_ma_safe
+                result_df['volume_ratio'] = result_df['volume_ratio'].fillna(1.0).clip(0, 10)  # Cap at reasonable range
+                
+                # On-Balance Volume (OBV) - FIXED implementation
                 obv = pd.Series(0.0, index=df.index)
                 if len(df) > 1:
-                    obv.iloc[0] = df['volume'].iloc[0]
+                    # Start OBV at 0 for stability
+                    obv.iloc[0] = 0
                     for i in range(1, len(df)):
                         if df['close'].iloc[i] > df['close'].iloc[i-1]:
-                            obv.iloc[i] = obv.iloc[i-1] + df['volume'].iloc[i]
+                            obv.iloc[i] = obv.iloc[i-1] + volume_data.iloc[i]
                         elif df['close'].iloc[i] < df['close'].iloc[i-1]:
-                            obv.iloc[i] = obv.iloc[i-1] - df['volume'].iloc[i]
+                            obv.iloc[i] = obv.iloc[i-1] - volume_data.iloc[i]
                         else:
                             obv.iloc[i] = obv.iloc[i-1]
                 result_df['obv'] = obv
@@ -341,9 +351,9 @@ class TechnicalIndicators:
                 result_df['obv_ma'] = result_df['obv'].rolling(window=10, min_periods=1).mean()
                 result_df['obv_trend'] = (result_df['obv'] > result_df['obv_ma']).astype(int)
                 
-                # Money Flow Index (MFI) - Simplified implementation
+                # Money Flow Index (MFI) - FIXED implementation
                 typical_price = (df['high'] + df['low'] + df['close']) / 3
-                money_flow = typical_price * df['volume']
+                money_flow = typical_price * volume_data  # Use our fixed volume data
                 
                 positive_flow = pd.Series(0.0, index=df.index)
                 negative_flow = pd.Series(0.0, index=df.index)
@@ -354,12 +364,17 @@ class TechnicalIndicators:
                     elif typical_price.iloc[i] < typical_price.iloc[i-1]:
                         negative_flow.iloc[i] = money_flow.iloc[i]
                 
-                # Calculate MFI
+                # Calculate MFI with safer division
                 pos_mf = positive_flow.rolling(window=default_config['mfi_period'], min_periods=1).sum()
                 neg_mf = negative_flow.rolling(window=default_config['mfi_period'], min_periods=1).sum()
+                
+                # Avoid division by zero and extreme values
+                total_flow = pos_mf + neg_mf
                 mfi_ratio = pos_mf / (neg_mf + 1e-10)
-                result_df['mfi'] = 100 - (100 / (1 + mfi_ratio))
-                result_df['mfi'] = result_df['mfi'].fillna(50.0)
+                mfi_raw = 100 - (100 / (1 + mfi_ratio))
+                
+                # Cap MFI between 0-100 and handle NaN/inf
+                result_df['mfi'] = mfi_raw.fillna(50.0).clip(0, 100)
                 
                 logger.info(f"Volume indicators calculated: OBV={result_df['obv'].iloc[-1]:.0f}, MFI={result_df['mfi'].iloc[-1]:.1f}, Volume Ratio={result_df['volume_ratio'].iloc[-1]:.2f}")
                 
