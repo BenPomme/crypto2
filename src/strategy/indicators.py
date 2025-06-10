@@ -319,24 +319,38 @@ class TechnicalIndicators:
             except Exception as e:
                 logger.warning(f"Skipping Bollinger Bands: {e}")
             
-            # Enhanced volume analysis with OBV and MFI - FIXED VERSION
+            # VOLUME ANALYSIS - CRYPTO-OPTIMIZED VERSION
             try:
-                # VOLUME FIX: Ensure volume data is meaningful for crypto
-                volume_data = df['volume'].fillna(0)
-                if volume_data.sum() == 0 or volume_data.mean() < 1e-6:
-                    # Handle missing/zero volume data - use price-based proxy
-                    logger.warning("Low/zero volume detected, using price-based volume proxy")
-                    volume_data = abs(df['close'].pct_change()).fillna(0) * 1000000  # Price volatility as volume proxy
+                # CRYPTO VOLUME FIX: Convert to dollar volume for meaningful analysis
+                raw_volume = df['volume'].fillna(0)
+                current_prices = df['close']
                 
+                # Calculate dollar volume (volume * price) for crypto
+                dollar_volume = raw_volume * current_prices
+                logger.info(f"Volume analysis: Raw volume sum={raw_volume.sum():.3f}, Dollar volume sum=${dollar_volume.sum():.0f}")
+                
+                # Use dollar volume for all calculations (more meaningful for crypto)
+                volume_data = dollar_volume
+                
+                # Handle insufficient volume data
+                if volume_data.sum() < 1000:  # Less than $1000 total volume
+                    logger.warning(f"Very low dollar volume detected (${volume_data.sum():.0f}), using price movement proxy")
+                    # Use price movement as volume proxy (works better than zero volume)
+                    price_movement = abs(df['close'].pct_change()).fillna(0) * current_prices
+                    volume_data = price_movement * 1000  # Scale up for meaningful calculations
+                
+                # Volume moving average with proper minimum
                 result_df['volume_ma'] = volume_data.rolling(window=20, min_periods=1).mean()
-                volume_ma_safe = result_df['volume_ma'].replace(0, result_df['volume_ma'].mean())
-                result_df['volume_ratio'] = volume_data / volume_ma_safe
-                result_df['volume_ratio'] = result_df['volume_ratio'].fillna(1.0).clip(0, 10)  # Cap at reasonable range
                 
-                # On-Balance Volume (OBV) - FIXED implementation
+                # Volume ratio calculation with safe division
+                volume_ma_safe = result_df['volume_ma'].replace(0, 1)  # Avoid division by zero
+                result_df['volume_ratio'] = volume_data / volume_ma_safe
+                result_df['volume_ratio'] = result_df['volume_ratio'].fillna(1.0).clip(0.1, 10)  # Reasonable range
+                
+                # OBV using dollar volume (much more meaningful for crypto)
                 obv = pd.Series(0.0, index=df.index)
                 if len(df) > 1:
-                    # Start OBV at 0 for stability
+                    # Start OBV at 0
                     obv.iloc[0] = 0
                     for i in range(1, len(df)):
                         if df['close'].iloc[i] > df['close'].iloc[i-1]:
@@ -345,15 +359,17 @@ class TechnicalIndicators:
                             obv.iloc[i] = obv.iloc[i-1] - volume_data.iloc[i]
                         else:
                             obv.iloc[i] = obv.iloc[i-1]
-                result_df['obv'] = obv
+                # Scale OBV to thousands for readability
+                result_df['obv'] = obv / 1000
                 
                 # OBV trend (rising/falling)
                 result_df['obv_ma'] = result_df['obv'].rolling(window=10, min_periods=1).mean()
                 result_df['obv_trend'] = (result_df['obv'] > result_df['obv_ma']).astype(int)
                 
-                # Money Flow Index (MFI) - FIXED implementation
+                # Money Flow Index (MFI) - Using dollar volume for crypto accuracy
                 typical_price = (df['high'] + df['low'] + df['close']) / 3
-                money_flow = typical_price * volume_data  # Use our fixed volume data
+                # MFI already uses price * volume, so volume_data (dollar volume) is perfect
+                money_flow = volume_data  # dollar volume is already typical_price concept
                 
                 positive_flow = pd.Series(0.0, index=df.index)
                 negative_flow = pd.Series(0.0, index=df.index)
@@ -368,13 +384,17 @@ class TechnicalIndicators:
                 pos_mf = positive_flow.rolling(window=default_config['mfi_period'], min_periods=1).sum()
                 neg_mf = negative_flow.rolling(window=default_config['mfi_period'], min_periods=1).sum()
                 
-                # Avoid division by zero and extreme values
+                # Safer MFI calculation to avoid extreme values
                 total_flow = pos_mf + neg_mf
-                mfi_ratio = pos_mf / (neg_mf + 1e-10)
-                mfi_raw = 100 - (100 / (1 + mfi_ratio))
+                # Avoid division by zero completely
+                mfi_result = pd.Series(50.0, index=df.index)  # Default neutral MFI
                 
-                # Cap MFI between 0-100 and handle NaN/inf
-                result_df['mfi'] = mfi_raw.fillna(50.0).clip(0, 100)
+                valid_mask = total_flow > 0
+                if valid_mask.any():
+                    mfi_ratio = pos_mf[valid_mask] / total_flow[valid_mask]
+                    mfi_result[valid_mask] = (mfi_ratio * 100).clip(0, 100)
+                
+                result_df['mfi'] = mfi_result.fillna(50.0)
                 
                 logger.info(f"Volume indicators calculated: OBV={result_df['obv'].iloc[-1]:.0f}, MFI={result_df['mfi'].iloc[-1]:.1f}, Volume Ratio={result_df['volume_ratio'].iloc[-1]:.2f}")
                 
