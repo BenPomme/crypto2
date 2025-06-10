@@ -18,6 +18,8 @@ from src.utils.logger import setup_logging
 from src.data.market_data import AlpacaDataProvider
 from src.data.data_buffer import DataBuffer
 from src.data.volume_data_manager import VolumeDataManager
+from config.stock_settings import get_stock_settings, is_stock_trading_enabled
+from src.strategy.stock_mean_reversion import StockMeanReversionStrategy
 from src.strategy.feature_engineering import FeatureEngineer
 from src.strategy.ma_crossover_strategy import MACrossoverStrategy
 from src.strategy.parameter_manager import ParameterManager
@@ -77,11 +79,22 @@ class CryptoTradingBot:
             
             # Parse trading symbols - Support multiple symbols
             symbols = [s.strip() for s in self.settings.trading.symbol.split(',')]
+            
+            # Add stock symbols if enabled
+            if is_stock_trading_enabled():
+                stock_settings = get_stock_settings()
+                if stock_settings and stock_settings.stock_symbols:
+                    stock_symbols = [s.strip() for s in stock_settings.stock_symbols.split(',') if s.strip()]
+                    symbols.extend(stock_symbols)
+                    self.logger.info(f"Added {len(stock_symbols)} stock symbols: {stock_symbols}")
+            
             self.trading_symbols = symbols
-            self.logger.info(f"Trading symbols: {symbols}")
+            self.logger.info(f"Total trading symbols: {symbols}")
             
             # Volume data manager for accurate crypto volume
-            self.volume_manager = VolumeDataManager(trading_symbols=symbols)
+            # Only pass crypto symbols to volume manager (Binance doesn't have stock data)
+            crypto_symbols = [s for s in symbols if '/' in s]
+            self.volume_manager = VolumeDataManager(trading_symbols=crypto_symbols)
             
             # Data buffers - one per symbol
             buffer_size = self.config.get('buffer_size', 1000)
@@ -152,6 +165,21 @@ class CryptoTradingBot:
                 'enable_trend_following': True,  # Enable trend continuation signals
             }
             self.strategy = MACrossoverStrategy(strategy_config, self.parameter_manager)
+            
+            # Initialize stock strategy if enabled
+            self.stock_strategy = None
+            if is_stock_trading_enabled():
+                stock_settings = get_stock_settings()
+                if stock_settings:
+                    stock_config = {
+                        'enable_shorts': stock_settings.enable_short_selling,
+                        'profit_target': 0.02,
+                        'stop_loss': 0.01,
+                        'min_confidence': 0.6,
+                        'min_volume': 1000000  # $1M minimum daily volume
+                    }
+                    self.stock_strategy = StockMeanReversionStrategy(stock_config)
+                    self.logger.info("Stock mean reversion strategy initialized")
             
             self.logger.info("All components initialized successfully")
             
@@ -362,8 +390,12 @@ class CryptoTradingBot:
             # Step 4: Get data and enhance with real volume data
             market_data = self.data_buffers[symbol].get_dataframe()
             
-            # Enhance volume data with Binance real-time data
-            enhanced_data = self.volume_manager.enhance_dataframe_volume(market_data, symbol)
+            # Enhance volume data with Binance real-time data (crypto only)
+            if self.data_provider.is_crypto_symbol(symbol):
+                enhanced_data = self.volume_manager.enhance_dataframe_volume(market_data, symbol)
+            else:
+                # For stocks, use Alpaca volume data as-is
+                enhanced_data = market_data
             
             # Engineer features with enhanced data
             feature_config = {
@@ -373,7 +405,16 @@ class CryptoTradingBot:
             featured_data = self.feature_engineer.engineer_features(enhanced_data, custom_config=feature_config)
             
             # Step 5: Generate trading signal for this symbol
-            signal = self.strategy.generate_signal(featured_data, symbol)
+            if self.data_provider.is_crypto_symbol(symbol):
+                signal = self.strategy.generate_signal(featured_data, symbol)
+            else:
+                # Use stock strategy for stock symbols
+                if self.stock_strategy:
+                    signal = self.stock_strategy.generate_signal(featured_data, symbol)
+                else:
+                    signal = None
+                    if self.cycle_count % 10 == 0:  # Log every 10 cycles
+                        self.logger.warning(f"No stock strategy available for {symbol}")
             
             # Log signal generation details
             if signal:
