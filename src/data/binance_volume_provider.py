@@ -20,7 +20,7 @@ class BinanceVolumeProvider:
     Provides accurate volume data to supplement Alpaca's low-volume crypto data
     """
     
-    def __init__(self):
+    def __init__(self, trading_symbols=None):
         """Initialize Binance volume provider"""
         self.ws = None
         self.volume_data = {}  # Symbol -> latest volume data
@@ -29,13 +29,25 @@ class BinanceVolumeProvider:
         self.reconnect_attempts = 0
         self.max_reconnect_attempts = 5
         
-        # Symbol mapping: Our symbols -> Binance symbols
-        self.symbol_mapping = {
+        # Complete symbol mapping: Our symbols -> Binance symbols
+        self.all_symbol_mapping = {
             'BTC/USD': 'btcusdt',
             'ETH/USD': 'ethusdt', 
             'SOL/USD': 'solusdt',
-            'AVAX/USD': 'avaxusdt'
+            'AVAX/USD': 'avaxusdt',
+            'MATIC/USD': 'maticusdt',
+            'DOGE/USD': 'dogeusdt'
         }
+        
+        # Filter to only trading symbols if provided
+        if trading_symbols:
+            self.symbol_mapping = {
+                symbol: self.all_symbol_mapping[symbol] 
+                for symbol in trading_symbols 
+                if symbol in self.all_symbol_mapping
+            }
+        else:
+            self.symbol_mapping = self.all_symbol_mapping
         
         # Reverse mapping for callbacks
         self.reverse_mapping = {v: k for k, v in self.symbol_mapping.items()}
@@ -43,7 +55,7 @@ class BinanceVolumeProvider:
         # WebSocket URL (free public API, no auth required)
         self.ws_url = "wss://data-stream.binance.vision/ws"
         
-        logger.info("Binance Volume Provider initialized")
+        logger.info(f"Binance Volume Provider initialized for symbols: {list(self.symbol_mapping.keys())}")
     
     def start(self) -> None:
         """Start the WebSocket connection and volume streaming"""
@@ -164,8 +176,12 @@ class BinanceVolumeProvider:
             "id": 1
         }
         
+        logger.info(f"📡 Subscribing to {len(streams)} volume streams:")
+        for our_symbol, binance_symbol in self.symbol_mapping.items():
+            logger.info(f"   {our_symbol} -> {binance_symbol}@miniTicker")
+        
         ws.send(json.dumps(subscribe_msg))
-        logger.info(f"📡 Subscribed to volume streams: {streams}")
+        logger.info(f"✅ Subscription request sent for: {streams}")
     
     def _on_message(self, ws, message: str) -> None:
         """Handle incoming WebSocket message"""

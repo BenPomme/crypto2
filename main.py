@@ -81,7 +81,7 @@ class CryptoTradingBot:
             self.logger.info(f"Trading symbols: {symbols}")
             
             # Volume data manager for accurate crypto volume
-            self.volume_manager = VolumeDataManager()
+            self.volume_manager = VolumeDataManager(trading_symbols=symbols)
             
             # Data buffers - one per symbol
             buffer_size = self.config.get('buffer_size', 1000)

@@ -294,9 +294,12 @@ class TradeExecutor:
                 break
         
         if not target_position:
+            # Position may have been closed elsewhere or strategy is out of sync
+            logger.warning(f"No position found for {signal.symbol} close signal - position may already be closed")
             return {
-                'success': False,
-                'reason': f'No position found for {signal.symbol}'
+                'success': True,  # Don't fail - position already closed is OK
+                'reason': f'No position to close for {signal.symbol} - already flat',
+                'order_result': None
             }
         
         # Determine order details

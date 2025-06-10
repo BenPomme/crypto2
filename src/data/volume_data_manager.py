@@ -17,14 +17,15 @@ class VolumeDataManager:
     Provides realistic volume estimates for crypto trading analysis
     """
     
-    def __init__(self):
+    def __init__(self, trading_symbols=None):
         """Initialize volume data manager"""
-        self.binance_provider = BinanceVolumeProvider()
+        self.trading_symbols = trading_symbols or ['BTC/USD', 'ETH/USD', 'SOL/USD', 'AVAX/USD']
+        self.binance_provider = BinanceVolumeProvider(trading_symbols=self.trading_symbols)
         self.volume_cache = {}  # Symbol -> cached volume estimates
         self.last_cache_update = {}  # Symbol -> last cache timestamp
         self.cache_duration = 60  # Cache for 60 seconds
         
-        logger.info("Volume Data Manager initialized")
+        logger.info(f"Volume Data Manager initialized for symbols: {self.trading_symbols}")
     
     def start(self) -> None:
         """Start the volume data providers"""
@@ -190,7 +191,7 @@ class VolumeDataManager:
         """Get summary of current volume data for all symbols"""
         summary = {}
         
-        for our_symbol in ['BTC/USD', 'ETH/USD', 'SOL/USD', 'AVAX/USD']:
+        for our_symbol in self.trading_symbols:
             volume_24h = self.binance_provider.get_24h_volume_usd(our_symbol)
             volume_rate = self.binance_provider.get_current_volume_rate(our_symbol)
             
