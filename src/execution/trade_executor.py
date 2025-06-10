@@ -205,6 +205,14 @@ class TradeExecutor:
             client_order_id=f"signal_{signal.timestamp.strftime('%Y%m%d_%H%M%S')}"
         )
         
+        # Check if order_result is None (critical error)
+        if order_result is None:
+            return {
+                'success': False,
+                'reason': 'Order placement failed - no response from order manager',
+                'order_result': None
+            }
+        
         if order_result.status == OrderStatus.REJECTED:
             return {
                 'success': False,

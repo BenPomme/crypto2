@@ -414,6 +414,10 @@ class PositionSizer:
         # Calculate position size based on stop loss
         if stop_loss_price and entry_price != stop_loss_price:
             price_risk = abs(entry_price - stop_loss_price) / entry_price
+            # Add minimum price risk to prevent huge positions from tiny stops
+            min_price_risk = 0.01  # At least 1% price movement
+            price_risk = max(price_risk, min_price_risk)
+            
             if price_risk > 0:
                 # Size position so maximum loss equals risk_amount
                 max_position_value = risk_amount / price_risk
@@ -428,7 +432,8 @@ class PositionSizer:
         max_crypto_position = account_value * self.config['crypto_max_position']
         
         # Use available buying power as the upper limit
-        max_capital_position = available_capital * 0.80  # Use 80% of buying power, keep 20% buffer
+        # Be more conservative - use 50% of buying power to avoid insufficient balance errors
+        max_capital_position = available_capital * 0.50  # Use 50% of buying power, keep 50% buffer
         
         # Use the most restrictive limit
         position_value = min(max_position_value, max_crypto_position, max_capital_position)
