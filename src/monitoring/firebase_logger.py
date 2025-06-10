@@ -60,6 +60,8 @@ class FirebaseLogger:
                 self.initialized = False
                 return
             
+            logger.info(f"Firebase credentials check: GOOGLE_APPLICATION_CREDENTIALS={has_service_account}, FIREBASE_SERVICE_ACCOUNT_KEY={has_firebase_key}")
+            
             # Check if Firebase app is already initialized
             try:
                 app = firebase_admin.get_app()
@@ -67,13 +69,27 @@ class FirebaseLogger:
             except ValueError:
                 # Try to initialize with available credentials
                 if has_firebase_key:
-                    # Use service account key from environment
-                    import json
-                    service_account_info = json.loads(os.getenv('FIREBASE_SERVICE_ACCOUNT_KEY'))
-                    cred = credentials.Certificate(service_account_info)
+                    # Use service account key from environment with robust parsing
+                    from ..utils.firebase_helper import parse_firebase_credentials
+                    try:
+                        service_account_info = parse_firebase_credentials()
+                        if service_account_info:
+                            cred = credentials.Certificate(service_account_info)
+                            logger.info("Using Firebase service account key from environment")
+                        else:
+                            raise ValueError("Could not parse Firebase credentials")
+                    except Exception as e:
+                        logger.error(f"Failed to use FIREBASE_SERVICE_ACCOUNT_KEY: {e}")
+                        # Try to use GOOGLE_APPLICATION_CREDENTIALS if available
+                        if has_service_account:
+                            cred = credentials.ApplicationDefault()
+                            logger.info("Falling back to GOOGLE_APPLICATION_CREDENTIALS")
+                        else:
+                            raise ValueError("Firebase credentials are invalid")
                 else:
                     # Use application default credentials (if available)
                     cred = credentials.ApplicationDefault()
+                    logger.info("Using GOOGLE_APPLICATION_CREDENTIALS")
                 
                 app = firebase_admin.initialize_app(cred, {
                     'projectId': settings.firebase.project_id
