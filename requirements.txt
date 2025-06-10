@@ -27,3 +27,6 @@ seaborn>=0.11.0
 # Utilities
 python-dateutil
 pytz
+
+# Real-time data streaming
+websocket-client>=1.6.0

@@ -17,6 +17,7 @@ from config.settings import get_settings
 from src.utils.logger import setup_logging
 from src.data.market_data import AlpacaDataProvider
 from src.data.data_buffer import DataBuffer
+from src.data.volume_data_manager import VolumeDataManager
 from src.strategy.feature_engineering import FeatureEngineer
 from src.strategy.ma_crossover_strategy import MACrossoverStrategy
 from src.strategy.parameter_manager import ParameterManager
@@ -78,6 +79,9 @@ class CryptoTradingBot:
             symbols = [s.strip() for s in self.settings.trading.symbol.split(',')]
             self.trading_symbols = symbols
             self.logger.info(f"Trading symbols: {symbols}")
+            
+            # Volume data manager for accurate crypto volume
+            self.volume_manager = VolumeDataManager()
             
             # Data buffers - one per symbol
             buffer_size = self.config.get('buffer_size', 1000)
@@ -175,6 +179,9 @@ class CryptoTradingBot:
             
             self.logger.info("✅ Trading bot successfully initialized and ready")
             
+            # Start volume data collection
+            self.volume_manager.start()
+            
             # Start main trading loop
             self.running = True
             self._main_loop()
@@ -186,6 +193,41 @@ class CryptoTradingBot:
             self.logger.error(traceback.format_exc())
         finally:
             self._shutdown()
+    
+    def _shutdown(self) -> None:
+        """Gracefully shutdown the trading bot"""
+        self.logger.info("Shutting down trading bot...")
+        self.running = False
+        
+        # Stop volume data collection
+        if hasattr(self, 'volume_manager'):
+            self.volume_manager.stop()
+        
+        self.logger.info("Trading bot shutdown complete")
+    
+    def _log_volume_status(self) -> None:
+        """Log volume data status for monitoring"""
+        try:
+            if not hasattr(self, 'volume_manager'):
+                return
+                
+            status = self.volume_manager.get_status()
+            summary = self.volume_manager.get_volume_summary()
+            
+            self.logger.info("📊 REAL-TIME VOLUME STATUS:")
+            self.logger.info(f"   Binance WebSocket: {'✅ Connected' if status['binance_provider']['connected'] else '❌ Disconnected'}")
+            self.logger.info(f"   Symbols Tracking: {status['binance_provider']['symbols_tracking']}")
+            
+            for symbol, data in summary.items():
+                if data['data_available']:
+                    volume_24h = data['volume_24h_usd']
+                    volume_min = data['volume_per_minute_usd']
+                    self.logger.info(f"   {symbol}: ${volume_24h:,.0f}/24h (${volume_min:,.0f}/min)")
+                else:
+                    self.logger.warning(f"   {symbol}: No volume data available")
+                    
+        except Exception as e:
+            self.logger.error(f"Error logging volume status: {e}")
     
     def _load_initial_data(self) -> None:
         """Load initial historical data for all trading symbols"""
@@ -245,6 +287,10 @@ class CryptoTradingBot:
                 # Log periodic status
                 if self.cycle_count % 10 == 0:
                     self._log_status()
+                
+                # Log volume data status every 50 cycles
+                if self.cycle_count % 50 == 0:
+                    self._log_volume_status()
                 
                 # Optimize parameters periodically (every 100 cycles)
                 if self.cycle_count % 100 == 0 and self.cycle_count > 0:
@@ -313,13 +359,18 @@ class CryptoTradingBot:
             if optimized_params:
                 self.strategy.update_parameters(optimized_params)
             
-            # Step 4: Get data and engineer features with strategy's MA periods
+            # Step 4: Get data and enhance with real volume data
             market_data = self.data_buffers[symbol].get_dataframe()
+            
+            # Enhance volume data with Binance real-time data
+            enhanced_data = self.volume_manager.enhance_dataframe_volume(market_data, symbol)
+            
+            # Engineer features with enhanced data
             feature_config = {
                 'ma_fast': self.strategy.fast_period,
                 'ma_slow': self.strategy.slow_period
             }
-            featured_data = self.feature_engineer.engineer_features(market_data, custom_config=feature_config)
+            featured_data = self.feature_engineer.engineer_features(enhanced_data, custom_config=feature_config)
             
             # Step 5: Generate trading signal for this symbol
             signal = self.strategy.generate_signal(featured_data, symbol)
