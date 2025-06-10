@@ -150,20 +150,16 @@ class AlpacaDataProvider(MarketDataProvider):
             initial_count = len(df)
             logger.debug(f"Received {initial_count} bars before filtering for {symbol}")
             
-            # Filter for specific exchange if needed (Coinbase Pro)
-            # Only filter if we have exchange column and CBSE data is available
+            # Use aggregated data from all exchanges for better volume data
+            # Based on research: Alpaca now uses its own exchange with lower volume than major exchanges
             if 'exchange' in df.columns:
                 available_exchanges = df['exchange'].unique()
-                logger.debug(f"Available exchanges for {symbol}: {list(available_exchanges)}")
+                logger.info(f"Available exchanges for {symbol}: {list(available_exchanges)}")
                 
-                # Prefer CBSE but fall back to all data if CBSE is insufficient
-                cbse_data = df[df.exchange == 'CBSE'].copy()
-                if len(cbse_data) >= max(20, periods * 0.5):  # At least 20 bars or 50% of requested
-                    df = cbse_data
-                    logger.debug(f"Using CBSE exchange data: {len(df)} bars")
-                else:
-                    logger.info(f"CBSE has insufficient data ({len(cbse_data)} bars), using all exchanges")
-                    # Keep all exchange data for better coverage
+                # ALWAYS use ALL exchange data for maximum volume aggregation
+                # Don't filter to single exchange - we want total market volume
+                total_exchanges = len(available_exchanges)
+                logger.info(f"Using aggregated data from {total_exchanges} exchanges for better volume coverage")
             
             # Ensure we have the required columns
             required_columns = ['open', 'high', 'low', 'close', 'volume']
@@ -174,9 +170,26 @@ class AlpacaDataProvider(MarketDataProvider):
             # Reset index to make timestamp a column
             df = df.reset_index()
             
-            # Log data quality metrics
+            # Log data quality metrics including volume analysis
             final_count = len(df)
             coverage_pct = (final_count / periods) * 100 if periods > 0 else 0
+            
+            # Log volume statistics to understand the data better
+            if 'volume' in df.columns and len(df) > 0:
+                volume_stats = df['volume'].describe()
+                total_volume = df['volume'].sum()
+                avg_price = df['close'].mean()
+                total_dollar_volume = (df['volume'] * df['close']).sum()
+                
+                logger.info(f"📊 VOLUME ANALYSIS for {symbol}:")
+                logger.info(f"   Raw Volume: Total={total_volume:.3f}, Avg={volume_stats['mean']:.3f}, Max={volume_stats['max']:.3f}")
+                logger.info(f"   Dollar Volume: Total=${total_dollar_volume:.0f}, Avg Price=${avg_price:.2f}")
+                logger.info(f"   Bars: {final_count}/{periods} ({coverage_pct:.1f}% coverage)")
+                
+                # Flag extremely low volume as suspicious
+                if total_dollar_volume < 10000:  # Less than $10k seems very low
+                    logger.warning(f"⚠️  VERY LOW VOLUME detected for {symbol}: ${total_dollar_volume:.0f} total dollar volume")
+            
             logger.info(f"Successfully fetched {final_count}/{periods} bars for {symbol} ({coverage_pct:.1f}% coverage)")
             
             if final_count < periods * 0.8:  # Less than 80% coverage
