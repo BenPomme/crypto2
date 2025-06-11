@@ -453,7 +453,9 @@ class PositionSizer:
         position_value = max(position_value, min_position)
         
         # Calculate position size in units
-        position_units = position_value / entry_price
+        # Add 2% buffer for market price movements during order placement
+        market_buffer = 0.98  # Use 98% of calculated value to leave room for price increases
+        position_units = (position_value * market_buffer) / entry_price
         
         # Calculate actual risk amount
         if stop_loss_price:
