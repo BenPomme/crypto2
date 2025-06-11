@@ -434,8 +434,9 @@ class PositionSizer:
         max_crypto_position = account_value * self.config['crypto_max_position']
         
         # Use available buying power as the upper limit
-        # Be more conservative - use 50% of buying power to avoid insufficient balance errors
-        max_capital_position = available_capital * 0.50  # Use 50% of buying power, keep 50% buffer
+        # Be more conservative - use 45% of buying power to avoid insufficient balance errors
+        # Also leave 2% buffer for market order slippage
+        max_capital_position = available_capital * 0.45  # Use 45% of buying power, keep 55% buffer for slippage
         
         # Use the most restrictive limit
         position_value = min(max_position_value, max_crypto_position, max_capital_position)
