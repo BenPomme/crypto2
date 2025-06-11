@@ -19,7 +19,8 @@ class StockTradingSettings(BaseSettings):
     stock_take_profit_pct: float = Field(default=0.02, env="STOCK_TAKE_PROFIT_PCT")
     
     class Config:
-        env_prefix = "STOCK_"
+        # Removed env_prefix to avoid conflicts with explicit env= fields
+        pass
 
 # Create a function to check if stock trading is enabled
 def is_stock_trading_enabled() -> bool:
