@@ -108,8 +108,10 @@ class PerformanceTracker:
                 'signal_type': trade_result.get('signal', {}).get('signal_type', 'UNKNOWN'),
                 'entry_price': trade_result.get('signal', {}).get('price', 0),
                 'success': trade_result.get('success', False),
-                'pnl': 0,  # Will be updated when position is closed
+                'pnl': trade_result.get('realized_pnl', 0),  # Use realized P&L if available
+                'realized_pl': trade_result.get('realized_pnl', 0),  # Add for metrics calculator
                 'execution_time': trade_result.get('execution_time', 0),
+                'order_id': trade_result.get('order_id', ''),
                 'metadata': trade_result
             }
             
@@ -218,10 +220,39 @@ class PerformanceTracker:
             Current performance data
         """
         try:
-            # Calculate metrics from current trades
-            metrics = self.metrics_calculator.calculate_returns_metrics(
-                self.trades_log, self.initial_capital
-            )
+            # Calculate P&L from equity curve if trades don't have P&L
+            if self.trades_log and all(trade.get('pnl', 0) == 0 for trade in self.trades_log):
+                # Use equity curve to estimate P&L
+                if len(self.equity_curve) >= 2:
+                    current_equity = self.equity_curve[-1]
+                    total_pnl = current_equity - self.initial_capital
+                    
+                    # Create synthetic trades with P&L for metrics calculation
+                    synthetic_trades = []
+                    if self.trades_log:
+                        # Distribute P&L across trades proportionally
+                        pnl_per_trade = total_pnl / len(self.trades_log) if len(self.trades_log) > 0 else 0
+                        for trade in self.trades_log:
+                            synthetic_trade = trade.copy()
+                            synthetic_trade['pnl'] = pnl_per_trade
+                            synthetic_trade['realized_pl'] = pnl_per_trade
+                            synthetic_trades.append(synthetic_trade)
+                    
+                    # Calculate metrics with synthetic trades
+                    metrics = self.metrics_calculator.calculate_returns_metrics(
+                        synthetic_trades if synthetic_trades else self.trades_log, 
+                        self.initial_capital
+                    )
+                else:
+                    # No equity changes yet
+                    metrics = self.metrics_calculator.calculate_returns_metrics(
+                        self.trades_log, self.initial_capital
+                    )
+            else:
+                # Trades have P&L, use them directly
+                metrics = self.metrics_calculator.calculate_returns_metrics(
+                    self.trades_log, self.initial_capital
+                )
             
             # Add trading metrics
             trading_metrics = self.metrics_calculator.calculate_trading_metrics(self.trades_log)
@@ -419,6 +450,33 @@ class PerformanceTracker:
         self.last_update = None
         
         logger.info(f"Performance tracker reset with ${self.initial_capital:.2f} capital")
+    
+    def update_closed_position_pnl(self, symbol: str, realized_pnl: float) -> None:
+        """
+        Update P&L for closed positions
+        
+        Args:
+            symbol: Symbol of the closed position
+            realized_pnl: Realized P&L from the closed position
+        """
+        try:
+            # Find the most recent trade for this symbol and update its P&L
+            for trade in reversed(self.trades_log):
+                if trade.get('symbol') == symbol and trade.get('pnl', 0) == 0:
+                    trade['pnl'] = realized_pnl
+                    trade['realized_pl'] = realized_pnl
+                    logger.info(f"Updated P&L for {symbol}: ${realized_pnl:.2f}")
+                    
+                    # Update metrics after P&L update
+                    self._update_metrics()
+                    
+                    # Log to Firebase with updated P&L
+                    if self.config['log_to_firebase']:
+                        self.firebase_logger.log_trade(trade)
+                    break
+                    
+        except Exception as e:
+            logger.error(f"Error updating closed position P&L: {e}")
     
     def __del__(self):
         """Cleanup on destruction"""

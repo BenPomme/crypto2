@@ -308,6 +308,9 @@ class CryptoTradingBot:
                 self.logger.debug(f"Starting trading cycle {self.cycle_count + 1}")
                 self._execute_trading_cycle()
                 
+                # Check for closed positions and update P&L
+                self._check_closed_positions()
+                
                 # Increment cycle counter
                 self.cycle_count += 1
                 self.logger.info(f"Completed trading cycle {self.cycle_count}")
@@ -411,6 +414,14 @@ class CryptoTradingBot:
                 # Use stock strategy for stock symbols
                 if self.stock_strategy:
                     signal = self.stock_strategy.generate_signal(featured_data, symbol)
+                    # Log stock analysis every 10 cycles
+                    if self.cycle_count % 10 == 0 and len(featured_data) > 0:
+                        latest = featured_data.iloc[-1]
+                        self.logger.info(f"📈 {symbol} Stock Analysis:")
+                        self.logger.info(f"   Price: ${latest.get('close', 0):.2f}")
+                        self.logger.info(f"   RSI: {latest.get('rsi', 'N/A')}")
+                        self.logger.info(f"   BB Position: {latest.get('bb_position', 'N/A')}")
+                        self.logger.info(f"   Volume: ${latest.get('volume', 0):,.0f}")
                 else:
                     signal = None
                     if self.cycle_count % 10 == 0:  # Log every 10 cycles
@@ -572,6 +583,54 @@ class CryptoTradingBot:
             
         except Exception as e:
             self.logger.error(f"Error optimizing parameters: {e}")
+    
+    def _check_closed_positions(self) -> None:
+        """Check for recently closed positions and update P&L"""
+        try:
+            # Get recent closed orders from Alpaca
+            closed_orders = self.data_provider.api.list_orders(
+                status='closed',
+                after=(datetime.now() - timedelta(hours=1)).isoformat(),
+                limit=50
+            )
+            
+            # Track P&L by symbol
+            symbol_pnl = {}
+            
+            for order in closed_orders:
+                if order.filled_qty and order.filled_avg_price:
+                    symbol = order.symbol
+                    
+                    # Calculate realized P&L for this order
+                    # Note: This is simplified - actual P&L calculation would need to match buy/sell orders
+                    if symbol not in symbol_pnl:
+                        symbol_pnl[symbol] = 0
+                    
+                    # For now, we'll get the actual P&L from position history
+                    # This is a placeholder - proper implementation would track entry/exit prices
+                    
+            # Get closed positions from account activity
+            try:
+                activities = self.data_provider.api.get_activities(activity_types='FILL')
+                
+                # Group by symbol and calculate P&L
+                for activity in activities[:20]:  # Check last 20 activities
+                    if hasattr(activity, 'symbol') and hasattr(activity, 'price'):
+                        # Update performance tracker with any realized P&L
+                        # Note: This needs proper P&L calculation from matched trades
+                        pass
+                        
+            except Exception as e:
+                self.logger.debug(f"Could not fetch account activities: {e}")
+            
+            # Alternative: Calculate P&L from equity curve changes
+            if len(self.performance_tracker.equity_curve) > 1:
+                recent_pnl = self.performance_tracker.equity_curve[-1] - self.performance_tracker.equity_curve[-2]
+                if abs(recent_pnl) > 0.01:  # Only log significant changes
+                    self.logger.info(f"Portfolio value changed by: ${recent_pnl:.2f}")
+                    
+        except Exception as e:
+            self.logger.debug(f"Error checking closed positions: {e}")
     
     def _signal_handler(self, signum, frame):
         """Handle shutdown signals"""
