@@ -9,7 +9,7 @@ from pydantic import Field
 class StockTradingSettings(BaseSettings):
     """Stock trading configuration"""
     enable_stock_trading: bool = Field(default=False, env="ENABLE_STOCK_TRADING")
-    stock_symbols: str = Field(default="", env="STOCK_SYMBOLS")
+    stock_symbols: str = Field(default="SPY,QQQ,AAPL,TSLA", env="STOCK_SYMBOLS")  # Default symbols as fallback
     stock_strategies: str = Field(default="mean_reversion", env="STOCK_STRATEGY")
     enable_short_selling: bool = Field(default=False, env="ENABLE_SHORT_SELLING")
     max_short_exposure: float = Field(default=0.5, env="MAX_SHORT_EXPOSURE")
