@@ -229,6 +229,8 @@ class PositionSizer:
         
         # Apply limits
         max_position = account_value * self.config['max_position_size']
+        # CRITICAL FIX: Also limit by actual buying power
+        max_position = min(max_position, account_value * 0.5)  # Never use more than 50%
         size_usd = min(size_usd, max_position)
         size_usd = max(size_usd, self.config['min_position_size'])
         size_units = size_usd / entry_price

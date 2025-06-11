@@ -81,12 +81,16 @@ class CryptoTradingBot:
             symbols = [s.strip() for s in self.settings.trading.symbol.split(',')]
             
             # Add stock symbols if enabled
+            self.logger.info(f"Checking stock trading: enabled={is_stock_trading_enabled()}")
             if is_stock_trading_enabled():
                 stock_settings = get_stock_settings()
+                self.logger.info(f"Stock settings loaded: {stock_settings is not None}")
                 if stock_settings and stock_settings.stock_symbols:
                     stock_symbols = [s.strip() for s in stock_settings.stock_symbols.split(',') if s.strip()]
                     symbols.extend(stock_symbols)
                     self.logger.info(f"Added {len(stock_symbols)} stock symbols: {stock_symbols}")
+                else:
+                    self.logger.warning("Stock settings or symbols not configured properly")
             
             self.trading_symbols = symbols
             self.logger.info(f"Total trading symbols: {symbols}")
@@ -309,7 +313,8 @@ class CryptoTradingBot:
                 self._execute_trading_cycle()
                 
                 # Check for closed positions and update P&L
-                self._check_closed_positions()
+                # TEMPORARILY DISABLED: May be causing issues
+                # self._check_closed_positions()
                 
                 # Increment cycle counter
                 self.cycle_count += 1
