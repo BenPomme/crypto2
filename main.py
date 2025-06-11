@@ -88,12 +88,20 @@ class CryptoTradingBot:
             if stock_enabled:
                 stock_settings = get_stock_settings()
                 self.logger.info(f"Stock settings loaded: {stock_settings is not None}")
-                if stock_settings and stock_settings.stock_symbols:
-                    stock_symbols = [s.strip() for s in stock_settings.stock_symbols.split(',') if s.strip()]
-                    symbols.extend(stock_symbols)
-                    self.logger.info(f"Added {len(stock_symbols)} stock symbols: {stock_symbols}")
+                if stock_settings:
+                    self.logger.info(f"DEBUG: stock_settings.stock_symbols = '{stock_settings.stock_symbols}'")
+                    self.logger.info(f"DEBUG: STOCK_SYMBOLS env = '{os.environ.get('STOCK_SYMBOLS', 'NOT SET')}'")
+                    self.logger.info(f"DEBUG: stock_symbols type = {type(stock_settings.stock_symbols)}")
+                    self.logger.info(f"DEBUG: stock_symbols bool = {bool(stock_settings.stock_symbols)}")
+                    
+                    if stock_settings.stock_symbols:
+                        stock_symbols = [s.strip() for s in stock_settings.stock_symbols.split(',') if s.strip()]
+                        symbols.extend(stock_symbols)
+                        self.logger.info(f"Added {len(stock_symbols)} stock symbols: {stock_symbols}")
+                    else:
+                        self.logger.warning(f"Stock symbols empty or None: '{stock_settings.stock_symbols}'")
                 else:
-                    self.logger.warning("Stock settings or symbols not configured properly")
+                    self.logger.warning("Stock settings not loaded properly")
             
             self.trading_symbols = symbols
             self.logger.info(f"Total trading symbols: {symbols}")
