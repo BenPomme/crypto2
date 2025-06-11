@@ -6,6 +6,7 @@ import sys
 import time
 import signal
 import traceback
+import os
 from datetime import datetime, timedelta
 from typing import Dict, Any, Optional
 import logging
@@ -81,8 +82,10 @@ class CryptoTradingBot:
             symbols = [s.strip() for s in self.settings.trading.symbol.split(',')]
             
             # Add stock symbols if enabled
-            self.logger.info(f"Checking stock trading: enabled={is_stock_trading_enabled()}")
-            if is_stock_trading_enabled():
+            stock_enabled = is_stock_trading_enabled()
+            self.logger.info(f"Checking stock trading: enabled={stock_enabled}")
+            self.logger.info(f"ENABLE_STOCK_TRADING env var: {os.environ.get('ENABLE_STOCK_TRADING', 'NOT SET')}")
+            if stock_enabled:
                 stock_settings = get_stock_settings()
                 self.logger.info(f"Stock settings loaded: {stock_settings is not None}")
                 if stock_settings and stock_settings.stock_symbols:
